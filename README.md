@@ -4,4 +4,5 @@ Pseudochemical simulator on python
 - minimal features by now
 
 Some examples:
-![A](images/demopic1.png?raw=true "demopic 1")
+
+!["demopic 1](images/demopic1.PNG?raw=true )
