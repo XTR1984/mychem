@@ -1,0 +1,1 @@
+ffmpeg -i output.avi -vf "setpts=0.5*PTS" -c:v libx264 -r 24 -pix_fmt yuv420p  output2.avi
