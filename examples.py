@@ -78,6 +78,6 @@ makestar1(160,100)
 makesuperstar(300,100,10)
 makepoly1(100,220)
 space.appendmixer()
-#space.stoptime =1
+#   space.stoptime =1
 space.go()
 
