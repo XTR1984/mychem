@@ -59,7 +59,7 @@ class Atom:
 		self.type = type
 		self.r = 10
 		self.nodes = []
-		self.f= random.random()
+		self.f= f
 		self.near = []
 		self.MAXVELOCITY = 1
 		if self.type<5:
@@ -271,7 +271,7 @@ class Space:
 								if rn<AVGRADIUS and not n1.bonded and not n2.bonded:
 									n1.bond(n2)
 									#print('bond '+str(i)+' '+str(j))
-								if rn>AVGRADIUS+10 and n1.pair == n2:
+								if rn>AVGRADIUS and n1.pair == n2:
 									n1.unbond()
 									#print('unbond '+str(i)+' '+str(j))
 								if not n1.bonded and not n2.bonded and rn<AVGRADIUS*5:
