@@ -88,13 +88,13 @@ class Atom:
 		if self.type==4:
 			outline = "yellow"
 		if self.type==5:
-			outline = "green"
+			outline = "brown"
 		if self.type==10:
 			outline = "magenta"
 		self.id = self.canvas.create_oval(self.x-self.r,self.y-self.r,self.x+self.r,self.y+self.r,outline=outline,fill=outline)
 		for n in self.nodes:
-			nx = self.x + cos(n.f-self.f)*self.r
-			ny = self.y + sin(n.f-self.f)*self.r
+			nx = self.x + cos(n.f+self.f)*self.r
+			ny = self.y - sin(n.f+self.f)*self.r
 			n.canvas_id = self.canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline='white')
 
 	def limits(self):
@@ -134,8 +134,8 @@ class Atom:
 	def move(self):
 		self.canvas.coords(self.id, self.x-self.r,self.y-self.r,self.x+self.r,self.y+self.r)
 		for n in self.nodes:
-			nx = self.x + cos(n.f-self.f)*self.r
-			ny = self.y + sin(n.f-self.f)*self.r
+			nx = self.x + cos(n.f+self.f)*self.r
+			ny = self.y - sin(n.f+self.f)*self.r
 			self.canvas.coords(n.canvas_id,nx-1,ny-1,nx+1,ny+1)
 			if n.bonded:
 				self.canvas.itemconfig(n.canvas_id,outline="orange",fill='orange')
@@ -151,6 +151,16 @@ class Space:
 		self.SCREENW=screenw
 		self.SCREENH=screenh
 		self.ATOMRADIUS = 10
+		self.BOND_KOEFF = 0.2
+		self.BONDR = 4
+		self.ATTRACT_KOEFF= 0.01
+		self.ATTRACTR = 5*self.ATOMRADIUS
+		self.ROTA_KOEFF = 0.00005
+		self.DETRACT1 = -3
+		self.DETRACT_KOEFF1 = 15
+		self.DETRACT2 = 5
+		self.DETRACT_KOEFF2= 5
+		self.t = -1
 		self.atoms = []	
 		self.mixers = []
 		self.action = None
@@ -164,14 +174,6 @@ class Space:
 		self.root.resizable(0, 0)
 		self.frame = Frame(self.root, bd=5, relief=SUNKEN)
 		self.frame.pack()
-		toolbar = Frame(self.root)
-		
-		btn1 = Button(toolbar, text="Button 1")
-		btn2 = Button(toolbar, text="Button 2")
-
-		# Add the buttons to the toolbar
-		#toolbar.add(btn1)
-		#toolbar.add(btn2)
 		self.canvas = Canvas(self.frame, width=self.WIDTH, height=self.HEIGHT, bd=0, highlightthickness=0,background="black")
 		self.canvas.pack()
 		self.canvas.update()
@@ -194,16 +196,15 @@ class Space:
 			self.atoms.append(m)
 	
 	def go(self):	
-		t=-1
 		K = 1
 		while(1):
 			N = len(self.atoms)
-			t +=1
+			self.t +=1
 			for i in range(0,N):
 				Ex=0
 				Ey=0
 				a = 0
-				if t%30==0:
+				if self.t%30==0:
 					for j in range(0,N):
 						a=0	
 						if i==j: continue
@@ -227,7 +228,6 @@ class Space:
 					delta_x = self.atoms[i].x-self.atoms[j].x
 					delta_y = self.atoms[i].y-self.atoms[j].y
 					r2 = delta_x*delta_x+ delta_y*delta_y
-					#if r2>self.ATOMRADIUS*self.ATOMRADIUS*5:continue
 					r = sqrt(r2)
 					SUMRADIUS = self.atoms[i].r+self.atoms[j].r
 					AVGRADIUS = SUMRADIUS/2
@@ -236,8 +236,11 @@ class Space:
 						continue;
 
 					# a> 0 отталкивание
-					if r<SUMRADIUS-2:
-						a = 1/r*15
+					if r<SUMRADIUS+self.DETRACT1:
+						a = 1/r*self.DETRACT_KOEFF1
+
+					if r<SUMRADIUS+self.DETRACT2:
+						a = 1/r*self.DETRACT_KOEFF2
 
 					Ex = Ex + delta_x/r *a
 					Ey = Ey + delta_y/r *a
@@ -249,49 +252,48 @@ class Space:
 					allnEy = 0
 					nvf = 0
 
+					
+					for n1 in self.atoms[i].nodes:
+						n1x = self.atoms[i].x + cos(n1.f+self.atoms[i].f)*self.atoms[i].r
+						n1y = self.atoms[i].y - sin(n1.f+self.atoms[i].f)*self.atoms[i].r
 
-					if True:
-						for n1 in self.atoms[i].nodes:
-							n1x = self.atoms[i].x + cos(n1.f-self.atoms[i].f)*self.atoms[i].r
-							n1y = self.atoms[i].y + sin(n1.f-self.atoms[i].f)*self.atoms[i].r
+						nEx = 0
+						nEy = 0
+						nvf = 0
+						for n2 in self.atoms[j].nodes:
+							n2x = self.atoms[j].x + cos(n2.f+self.atoms[j].f)*self.atoms[j].r
+							n2y = self.atoms[j].y - sin(n2.f+self.atoms[j].f)*self.atoms[j].r
+							delta_x = n1x-n2x
+							delta_y = n1y-n2y
+							#delta_f = (n1.f-self.atoms[i].f) - (n2.f-self.atoms[j].f) 
+							r2 = delta_x*delta_x + delta_y*delta_y
+							rn = sqrt(r2) 
+							if rn==0: continue
+							a = 0
+							if rn<self.BONDR and not n1.bonded and not n2.bonded:
+								n1.bond(n2)
+								#print('bond '+str(i)+' '+str(j))
+							if rn>self.BONDR and n1.pair == n2:
+								n1.unbond()
+								#print('unbond '+str(i)+' '+str(j))
+							if not n1.bonded and not n2.bonded and rn<self.ATTRACTR and r>self.ATOMRADIUS	:
+								#a = -0.0005
+								a = -1/rn*self.ATTRACT_KOEFF
+								nvf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+self.atoms[i].f)*self.atoms[i].r * delta_y + delta_x*sin(n1.f+self.atoms[i].f)*self.atoms[i].r)
+							if n1.pair == n2:
+								if (rn>0): 
+									a = -r2*self.BOND_KOEFF
+									nvf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+self.atoms[i].f)*self.atoms[i].r * delta_y + delta_x*sin(n1.f+self.atoms[i].f)*self.atoms[i].r)
+							
+							nEx = nEx + delta_x/rn * a
+							nEy = nEy + delta_y/rn * a
 
-							nEx = 0
-							nEy = 0
-							nvf = 0
-							for n2 in self.atoms[j].nodes:
-								n2x = self.atoms[j].x + cos(n2.f-self.atoms[j].f)*self.atoms[j].r
-								n2y = self.atoms[j].y + sin(n2.f-self.atoms[j].f)*self.atoms[j].r
-								delta_x = n1x-n2x
-								delta_y = n1y-n2y
-								#delta_f = (n1.f-self.atoms[i].f) - (n2.f-self.atoms[j].f) 
-								r2 = delta_x*delta_x + delta_y*delta_y
-								rn = sqrt(r2) 
-								if rn==0: continue
-								a = 0
-								if rn<AVGRADIUS and not n1.bonded and not n2.bonded:
-									n1.bond(n2)
-									#print('bond '+str(i)+' '+str(j))
-								if rn>AVGRADIUS and n1.pair == n2:
-									n1.unbond()
-									#print('unbond '+str(i)+' '+str(j))
-								if not n1.bonded and not n2.bonded and rn<AVGRADIUS*5:
-									#a = -0.0005
-									a = -1/rn/50
-									nvf += 1/rn * 0.0001 * (cos(n1.f-self.atoms[i].f)*self.atoms[i].r * delta_y - delta_x*sin(n1.f-self.atoms[i].f)*self.atoms[i].r)
-								if n1.pair == n2:
-									if (rn<8): 
-										a = -r2*0.15
-										nvf += 1/rn * 0.0001 * (cos(n1.f-self.atoms[i].f)*self.atoms[i].r * delta_y - delta_x*sin(n1.f-self.atoms[i].f)*self.atoms[i].r)
-								
-								nEx = nEx + delta_x/rn * a
-								nEy = nEy + delta_y/rn * a
+						allnEx = allnEx + nEx
+						allnEy = allnEy + nEy
+						self.atoms[i].vf = self.atoms[i].vf + nvf
 
-							allnEx = allnEx + nEx
-							allnEy = allnEy + nEy
-							self.atoms[i].vf = self.atoms[i].vf + nvf
-
-						Ex+= allnEx*0.5
-						Ey+= allnEy*0.5
+					Ex+= allnEx
+					Ey+= allnEy
 
 
 
@@ -317,7 +319,7 @@ class Space:
 						m.vy = -1
 
 			if self.action:
-				self.action						
+				self.action(self)
 	
 			for i in range(0,N):
 				self.atoms[i].vx *= 0.9999
@@ -331,10 +333,10 @@ class Space:
 			#		for i in range(0,N):	
 
 			if self.stoptime!= -1:
-				if t<self.stoptime:
+				if self.t<self.stoptime:
 					self.canvas.update()
 					if self.recording:
-						save_widget_as_image(self.canvas,'output/'+str(t)+'.png')
+						save_widget_as_image(self.canvas,'output/'+str(self.t)+'.png')
 
 				else:
 					sleep(1)
@@ -342,11 +344,11 @@ class Space:
 			else:				
 				self.canvas.update()
 				if self.recording:
-					save_widget_as_image(self.canvas,'output/'+str(t)+'.png')
+					save_widget_as_image(self.canvas,'output/'+str(self.t)+'.png')
 
 			
-			if t%100 ==0:
-				print(t)
+			if self.t%100 ==0:
+				print(self.t)
 			#time.sleep(0.005)
   
 

@@ -5,7 +5,7 @@ random.seed(1)
 space = Space()
 for i in range(1,20):
 	for j in range(1,10):
-		space.appendatom(Atom(100+25*i, 100+25*j, 2))
+		space.appendatom(Atom(100+20*i, 100+25*j, 2))
 space.appendmixer(10)
 a1 = Atom(200, 200, 4)
 space.appendatom(a1)

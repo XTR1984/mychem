@@ -53,7 +53,7 @@ def makepoly1(x,y,n=5):
     a1= Atom(x+n*D, y, 1,PI)
     space.appendatom(a1)
     for i in range(0,n):
-        a1= Atom(x+i*D, y, 5, 0 if i%2!=0 else PI)
+        a1= Atom(x+i*D, y, 5, PI if i%2!=0 else 0)
         space.appendatom(a1)
         if i%2==0:
             a1= Atom(x+i*D, y-D, 2, PI/2)
@@ -75,9 +75,12 @@ space = Space()
 
 makeethan(50,100)
 makestar1(160,100)
-makesuperstar(300,100,10)
+makesuperstar(400,200,20)
+makesuperstar(600,200,10)
+makesuperstar(400,400,5)
+makesuperstar(600,400,6)
 makepoly1(100,220)
-space.appendmixer()
+#space.appendmixer(5)
 #   space.stoptime =1
 space.go()
 
