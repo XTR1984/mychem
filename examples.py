@@ -1,8 +1,10 @@
 import random
 from mychem import Space,Atom,PI
+import mychem
 from math import *
 
-def makestar1(x,y):
+
+def makestar1(space,x,y):
         D=20
         space.appendatom(Atom(x,y,4))
         space.appendatom(Atom(x+D,y,2))
@@ -15,19 +17,20 @@ def makestar1(x,y):
         space.appendatom(Atom(x,y-2*D,1,PI*3/2))
 
 
-def makeethan(x,y):
+def makeethan(space,x,y):
         D=20
-        space.appendatom(Atom(x,y,4))
-        space.appendatom(Atom(x+D,y,4))
-        space.appendatom(Atom(x-D,y,1))
-        space.appendatom(Atom(x,y-D,1,PI*3/2))
-        space.appendatom(Atom(x,y+D,1,PI/2))
-        space.appendatom(Atom(x+D+D,y,1,PI))
-        space.appendatom(Atom(x+D,y-D,1,PI*3/2))
-        space.appendatom(Atom(x+D,y+D,1,PI/2))
+        D2=16
+        space.appendatom(Atom(x,y,4,m=12))
+        space.appendatom(Atom(x+D,y,4,m=12))
+        space.appendatom(Atom(x-D2,y,1,r=6))
+        space.appendatom(Atom(x,y-D2,1,PI*3/2,r=6))
+        space.appendatom(Atom(x,y+D2,1,PI/2,r=6))
+        space.appendatom(Atom(x+D+D2,y,1,PI,r=6))
+        space.appendatom(Atom(x+D,y-D2,1,PI*3/2,r=6))
+        space.appendatom(Atom(x+D,y+D2,1,PI/2,r=6))
 
 
-def makesuperstar(ox,oy, n):
+def makesuperstar(space,ox,oy, n,m=1):
     D=20
     f = 0
     R = D*n/PI/4*2
@@ -36,17 +39,18 @@ def makesuperstar(ox,oy, n):
             y = oy-sin(f)*R
             a1= Atom(x, y, 3,2*PI/n*i)
             space.appendatom(a1)
-            x = ox+cos(f)*(R+D)
-            y = oy-sin(f)*(R+D)
-            a1= Atom(x, y, 2, 2*PI/n*i)
-            space.appendatom(a1)
-            x = ox+cos(f)*(R+D*2)
-            y = oy-sin(f)*(R+D*2)
+            for j in range(0,m):
+                x = ox+cos(f)*(R+D*j+D)
+                y = oy-sin(f)*(R+D*j+D)
+                a1= Atom(x, y, 2, 2*PI/n*i)
+                space.appendatom(a1)
+            x = ox+cos(f)*(R+D*m+D)
+            y = oy-sin(f)*(R+D*m+D)
             a1= Atom(x, y, 1,2*PI/n*i+PI)
             space.appendatom(a1)
             f+=2*PI/n
 
-def makepoly1(x,y,n=5): 
+def makepoly1(space,x,y,n=5): 
     D=20
     a1= Atom(x-D, y, 1)
     space.appendatom(a1)
@@ -67,20 +71,91 @@ def makepoly1(x,y,n=5):
             space.appendatom(a1)
 
 
+def makeformaldehyde(space,x,y):
+    D=20
+    D2 = 17
+    a1= Atom(x, y, 4,m=12)
+    space.appendatom(a1)
+    a1= Atom(x, y+D2,1,1/2*PI,r=6)
+    space.appendatom(a1)
+    a1= Atom(x-D2, y,1,0,r=6)
+    space.appendatom(a1)
+    a1= Atom(x+6, y-6, 2,PI/4+PI/2,m=16,r=8)
+    space.appendatom(a1)
 
 
-random.seed(1)
-space = Space()
+
+def makeH2O(space,x,y):
+    D=15
+    a1= Atom(x, y, 2,m=16,r=8)
+    space.appendatom(a1)
+    a1= Atom(x+D, y, 1,PI,r=6)
+    space.appendatom(a1)
+    a1= Atom(x-D, y, 1,0,r=6)
+    space.appendatom(a1)
+
+def makeCO2(space,x,y):
+    D=20
+    D2 = 16
+    a1= Atom(x, y, 4,m=12)
+    space.appendatom(a1)
+    a1= Atom(x+6, y-6, 2,PI/4+PI/2,m=16,r=8)
+    space.appendatom(a1)
+    a1= Atom(x-6, y+6, 2,PI/4+PI/2,m=16,r=8)
+    space.appendatom(a1)
 
 
-makeethan(50,100)
-makestar1(160,100)
-makesuperstar(400,200,20)
-makesuperstar(600,200,10)
-makesuperstar(400,400,5)
-makesuperstar(600,400,6)
-makepoly1(100,220)
-#space.appendmixer(5)
-#   space.stoptime =1
-space.go()
+
+
+def makeriboza(space,x,y):
+    D=20
+    D2 = 17
+    D3 = 19
+    a1= Atom(x-D2, y, 1,2*PI)
+    a1.r=6
+    space.appendatom(a1)
+    for i in range(0,5):
+        a1= Atom(x+i*D, y, 4)
+        a1.m=12
+        space.appendatom(a1)
+        if i<4:
+            a1= Atom(x+i*D, y-D2, 1,3/2*PI)
+            a1.r=6
+            space.appendatom(a1)
+            a1= Atom(x+i*D, y+D3, 2,PI/2)
+            a1.r=8
+            a1.m=16
+            space.appendatom(a1)
+            a1= Atom(x+i*D, y+D2+D3, 1,PI/2)
+            a1.r=6
+            space.appendatom(a1)
+        else:
+            a1= Atom(x+i*D, y+D2, 1,1/2*PI)
+            a1.r=6
+            space.appendatom(a1)
+            a1= Atom(x+i*D+6, y-6, 2,PI/4+PI/2)
+            a1.m=16
+            a1.r=8
+            space.appendatom(a1)
+
+            
+
+
+if __name__ == '__main__':
+
+    random.seed(1)
+    space = Space()
+
+    makeCO2(space,250,50)
+    makeH2O(space,350,50)
+    makeethan(space,50,100)
+    makestar1(space,160,100)
+    makesuperstar(space,300,200,20)
+    makesuperstar(space,700,300,10,5)
+    makepoly1(space,100,220)
+    makeriboza(space,400,400)
+    makeformaldehyde(space,800,100)
+    space.appendmixer(1)
+#    space.stoptime =1
+    space.go()
 

@@ -43,7 +43,7 @@ class Node:
 			self.bonded = False
 
 class Atom:
-	def __init__(self,x,y,type,f=0):
+	def __init__(self,x,y,type=1,f=0,r=10,m=1,fixed=False):
 		self.YSHIFT = 0
 		self.x = x
 		self.y = y
@@ -54,12 +54,13 @@ class Atom:
 		self.ay = 0.0
 		self.vf = 0.0
 		self.af = 0.0
-		self.m = 1
+		self.m = m
 		self.q = 1
 		self.type = type
-		self.r = 10
+		self.r = r
 		self.nodes = []
 		self.f= f
+		self.fixed = fixed
 		self.near = []
 		self.MAXVELOCITY = 1
 		self.UNBONDEDCOLOR = "white"
@@ -124,13 +125,14 @@ class Atom:
 			self.f+= 2*PI
 
 	def next(self):
-		self.vx = self.vx + self.ax
-		self.vy = self.vy + self.ay
-		self.vf = self.vf + self.af
-		self.x  = self.x+self.vx
-		self.y  = self.y+self.vy
-		self.f  = self.f+self.vf
-		self.limits()
+		if not self.fixed:
+			self.vx = self.vx + self.ax
+			self.vy = self.vy + self.ay
+			self.vf = self.vf + self.af
+			self.x  = self.x+self.vx
+			self.y  = self.y+self.vy
+			self.f  = self.f+self.vf
+			self.limits()
 
 
 
