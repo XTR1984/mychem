@@ -40,7 +40,7 @@ for i in range(0,3):
                 makeethan(600+i*100,200+j*100)
 #space.stoptime = 10
 space.appendmixer(10)
-space.recording = True
+#space.recording = True
 space.stoptime = 24*60*20
 space.go()
 

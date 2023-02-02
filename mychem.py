@@ -62,6 +62,21 @@ class Atom:
 		self.f= f
 		self.near = []
 		self.MAXVELOCITY = 1
+		self.UNBONDEDCOLOR = "white"
+		self.BONDEDCOLOR = "orange"
+		if self.type==1:
+			self.color = "blue"
+		if self.type==2:
+			self.color = "red"
+		if self.type==3:
+			self.color = "grey"
+		if self.type==4:
+			self.color = "yellow"
+		if self.type==5:
+			self.color = "brown"
+		if self.type==10:
+			self.color = "magenta"
+
 		if self.type<5:
 			for i in range(0,self.type):
 				n = Node()
@@ -79,23 +94,11 @@ class Atom:
 	def draw(self,space):
 		self.space=space
 		self.canvas = space.canvas
-		if self.type==1:
-			outline = "blue"
-		if self.type==2:
-			outline = "red"
-		if self.type==3:
-			outline = "grey"
-		if self.type==4:
-			outline = "yellow"
-		if self.type==5:
-			outline = "brown"
-		if self.type==10:
-			outline = "magenta"
-		self.id = self.canvas.create_oval(self.x-self.r,self.y-self.r,self.x+self.r,self.y+self.r,outline=outline,fill=outline)
+		self.id = self.canvas.create_oval(self.x-self.r,self.y-self.r,self.x+self.r,self.y+self.r,outline=self.color,fill=self.color)
 		for n in self.nodes:
 			nx = self.x + cos(n.f+self.f)*self.r
 			ny = self.y - sin(n.f+self.f)*self.r
-			n.canvas_id = self.canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline='white')
+			n.canvas_id = self.canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=self.UNBONDEDCOLOR)
 
 	def limits(self):
 		if self.vx < -self.MAXVELOCITY: self.vx=-self.MAXVELOCITY
@@ -138,9 +141,9 @@ class Atom:
 			ny = self.y - sin(n.f+self.f)*self.r
 			self.canvas.coords(n.canvas_id,nx-1,ny-1,nx+1,ny+1)
 			if n.bonded:
-				self.canvas.itemconfig(n.canvas_id,outline="orange",fill='orange')
+				self.canvas.itemconfig(n.canvas_id,outline=self.BONDEDCOLOR,fill=self.BONDEDCOLOR)
 			if not n.bonded:
-				self.canvas.itemconfig(n.canvas_id,outline="white",fill='white')
+				self.canvas.itemconfig(n.canvas_id,outline=self.UNBONDEDCOLOR,fill=self.UNBONDEDCOLOR)
 
 		
 
