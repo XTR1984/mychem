@@ -24,8 +24,9 @@ def makesomething(x,y):
 
 #space.stoptime = 10
 makesomething(150,250)
-space.appendmixer(20)
+space.appendmixer(10)
 #space.recording = True
-space.stoptime = 24*60*40
+space.stoptime = 24*60*10
+space.export = True
 space.go()
 

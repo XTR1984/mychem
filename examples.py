@@ -1,4 +1,5 @@
 import random
+from re import S
 from mychem import Space,Atom,PI
 import mychem
 from math import *
@@ -74,20 +75,20 @@ def makepoly1(space,x,y,n=5):
 def makeformaldehyde(space,x,y):
     D=20
     D2 = 17
-    a1= Atom(x, y, 4,m=12)
+    a1= Atom(x, y, 4,m=12,q=-1)
     space.appendatom(a1)
     a1= Atom(x, y+D2,1,1/2*PI,r=6)
     space.appendatom(a1)
     a1= Atom(x-D2, y,1,0,r=6)
     space.appendatom(a1)
-    a1= Atom(x+6, y-6, 2,PI/4+PI/2,m=16,r=8)
+    a1= Atom(x+6, y-6, 2,PI/4+PI/2,m=16,r=8,q=-1)
     space.appendatom(a1)
 
 
 
 def makeH2O(space,x,y):
     D=15
-    a1= Atom(x, y, 2,m=16,r=8)
+    a1= Atom(x, y, 2,m=16,r=8,q=-1)
     space.appendatom(a1)
     a1= Atom(x+D, y, 1,PI,r=6)
     space.appendatom(a1)
@@ -97,11 +98,11 @@ def makeH2O(space,x,y):
 def makeCO2(space,x,y):
     D=20
     D2 = 16
-    a1= Atom(x, y, 4,m=12)
+    a1= Atom(x, y, 4,m=12,q=-1)
     space.appendatom(a1)
-    a1= Atom(x+6, y-6, 2,PI/4+PI/2,m=16,r=8)
+    a1= Atom(x+6, y-6, 2,PI/4+PI/2,m=16,r=8,q=-1)
     space.appendatom(a1)
-    a1= Atom(x-6, y+6, 2,PI/4+PI/2,m=16,r=8)
+    a1= Atom(x-6, y+6, 2,PI/4+PI/2,m=16,r=8,q=-1)
     space.appendatom(a1)
 
 
@@ -115,14 +116,13 @@ def makeriboza(space,x,y):
     a1.r=6
     space.appendatom(a1)
     for i in range(0,5):
-        a1= Atom(x+i*D, y, 4)
-        a1.m=12
+        a1= Atom(x+i*D, y, 4,m=12,q=-1)
         space.appendatom(a1)
         if i<4:
             a1= Atom(x+i*D, y-D2, 1,3/2*PI)
             a1.r=6
             space.appendatom(a1)
-            a1= Atom(x+i*D, y+D3, 2,PI/2)
+            a1= Atom(x+i*D, y+D3, 2,PI/2,q=-1)
             a1.r=8
             a1.m=16
             space.appendatom(a1)
@@ -133,7 +133,7 @@ def makeriboza(space,x,y):
             a1= Atom(x+i*D, y+D2, 1,1/2*PI)
             a1.r=6
             space.appendatom(a1)
-            a1= Atom(x+i*D+6, y-6, 2,PI/4+PI/2)
+            a1= Atom(x+i*D+6, y-6, 2,PI/4+PI/2,q=-1)
             a1.m=16
             a1.r=8
             space.appendatom(a1)
@@ -155,7 +155,9 @@ if __name__ == '__main__':
     makepoly1(space,100,220)
     makeriboza(space,400,400)
     makeformaldehyde(space,800,100)
-    space.appendmixer(1)
+    space.appendmixer(5)
 #    space.stoptime =1
+#    space.competitive = True
+#    space.export = True
     space.go()
 

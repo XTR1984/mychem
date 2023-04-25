@@ -4,10 +4,11 @@ from tkinter import *
 from math import *
 import random
 import os
-
+import json
+from json import encoder
+#encoder.FLOAT_REPR = lambda o: format(o, '.3f')
 
 PI = 3.1415926535
-
 from PIL import ImageGrab
 
 
@@ -43,7 +44,10 @@ class Node:
 			self.bonded = False
 
 class Atom:
-	def __init__(self,x,y,type=1,f=0,r=10,m=1,fixed=False):
+	id = 0
+	def __init__(self,x,y,type=1,f=0,r=10,m=1,q=1,fixed=False):
+		Atom.id += 1
+		self.id = Atom.id
 		self.YSHIFT = 0
 		self.x = x
 		self.y = y
@@ -55,11 +59,10 @@ class Atom:
 		self.vf = 0.0
 		self.af = 0.0
 		self.m = m
-		self.q = 1
+		self.q = q
 		self.type = type
 		self.r = r
 		self.nodes = []
-		self.f= f
 		self.fixed = fixed
 		self.near = []
 		self.MAXVELOCITY = 1
@@ -91,7 +94,7 @@ class Atom:
 			self.nodes.extend([n1,n2,n3])
 
 	def draw(self,canvas):
-		self.id = canvas.create_oval(self.x-self.r,self.y-self.r,self.x+self.r,self.y+self.r,outline=self.color,fill=self.color)
+		self.canvas_id = canvas.create_oval(self.x-self.r,self.y-self.r,self.x+self.r,self.y+self.r,outline=self.color,fill=self.color)
 		for n in self.nodes:
 			nx = self.x + cos(n.f+self.f)*self.r
 			ny = self.y - sin(n.f+self.f)*self.r
@@ -153,12 +156,15 @@ class Space:
 		self.DETRACT_KOEFF1 = 15
 		self.DETRACT2 = 5
 		self.DETRACT_KOEFF2= 5
+		self.competitive = False
 		self.t = -1
 		self.atoms = []	
 		self.mixers = []
 		self.action = None
 		self.activemixer = False
 		self.recording = False
+		self.export = False
+		self.export_file = "mychem.json"
 		self.stoptime = -1
 		self.g = 0.01
 		self.gravity = False
@@ -190,6 +196,25 @@ class Space:
 			self.activemixer = True
 			self.atoms.append(m)
 	
+	def do_export(self):
+		frame = {}
+		frame["time"] = self.t
+		frame["atoms"] = []
+		N = len(self.atoms)
+		for i in range(0,N):
+			atom = {}
+			atom["id"] = self.atoms[i].id
+			atom["type"] = self.atoms[i].type
+			atom["x"] = round(self.atoms[i].x,4)
+			atom["y"] = round(self.atoms[i].y,4)
+			atom["f"] = round(self.atoms[i].f,4)
+			atom["r"] = self.atoms[i].r
+			frame["atoms"].append(atom)
+		if (not self.export):
+			self.exportf = open("output/" + self.export_file, "a")
+		self.exportf.write(json.dumps(frame)+"\n")
+
+		#			j = 
 	def go(self):	
 		K = 1
 		while(1):
@@ -247,7 +272,7 @@ class Space:
 					allnEy = 0
 					nvf = 0
 
-					
+					Q = self.atoms[i].q*self.atoms[j].q
 					for n1 in self.atoms[i].nodes:
 						n1x = self.atoms[i].x + cos(n1.f+self.atoms[i].f)*self.atoms[i].r
 						n1y = self.atoms[i].y - sin(n1.f+self.atoms[i].f)*self.atoms[i].r
@@ -271,15 +296,17 @@ class Space:
 							if rn>self.BONDR and n1.pair == n2:
 								n1.unbond()
 								#print('unbond '+str(i)+' '+str(j))
-							if not n1.bonded and not n2.bonded and rn<self.ATTRACTR and r>self.ATOMRADIUS	:
-								#a = -0.0005
-								a = -1/rn*self.ATTRACT_KOEFF
-								nvf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+self.atoms[i].f)*self.atoms[i].r * delta_y + delta_x*sin(n1.f+self.atoms[i].f)*self.atoms[i].r)
 							if n1.pair == n2:
 								if (rn>0): 
 									a = -r2*self.BOND_KOEFF
 									nvf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+self.atoms[i].f)*self.atoms[i].r * delta_y + delta_x*sin(n1.f+self.atoms[i].f)*self.atoms[i].r)
-							
+							#if not n1.bonded and not n2.bonded and rn<self.ATTRACTself.atoms[i].qR and r>self.ATOMRADIUS	:
+							elif self.competitive:
+								#a = -0.0005
+								a = 1/rn*self.ATTRACT_KOEFF*Q
+								nvf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+self.atoms[i].f)*self.atoms[i].r * delta_y + delta_x*sin(n1.f+self.atoms[i].f)*self.atoms[i].r)
+
+
 							nEx = nEx + delta_x/rn * a
 							nEy = nEy + delta_y/rn * a
 
@@ -293,8 +320,8 @@ class Space:
 
 
 
-				self.atoms[i].ax= K*self.atoms[i].q*Ex/self.atoms[i].m 
-				self.atoms[i].ay= K*self.atoms[i].q*Ey/self.atoms[i].m				
+				self.atoms[i].ax= K*Ex/self.atoms[i].m 
+				self.atoms[i].ay= K*Ey/self.atoms[i].m				
 				if self.gravity:
 					self.atoms[i].ay +=self.g
 				
@@ -333,6 +360,8 @@ class Space:
 					self.canvas.update()
 					if self.recording:
 						save_widget_as_image(self.canvas,'output/'+str(self.t)+'.png')
+					if self.export:
+						self.do_export()
 
 				else:
 					sleep(1)
@@ -341,6 +370,9 @@ class Space:
 				self.canvas.update()
 				if self.recording:
 					save_widget_as_image(self.canvas,'output/'+str(self.t)+'.png')
+				if self.export:
+						self.do_export()
+
 
 			
 			if self.t%100 ==0:

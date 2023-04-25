@@ -84,22 +84,23 @@ class Atom:
 				n.f = 2*PI/self.type*i
 				self.nodes.append(n)
 		elif self.type==5:
-			n1 = Node()
-			n2 = Node()
-			n3 = Node()
+			(n1,n2,n3) = (Node(),Node(),Node())
 			n1.f = 0
 			n2.f = PI/2
 			n3.f = PI
 			self.nodes.extend([n1,n2,n3])
 
-	def draw(self,space):
-		self.space=space
-		self.canvas = space.canvas
-		self.id = self.canvas.create_oval(self.x-self.r,self.y-self.r,self.x+self.r,self.y+self.r,outline=self.color,fill=self.color)
+	def draw(self,canvas):
+		self.id = canvas.create_oval(self.x-self.r,self.y-self.r,self.x+self.r,self.y+self.r,outline=self.color,fill=self.color)
 		for n in self.nodes:
 			nx = self.x + cos(n.f+self.f)*self.r
 			ny = self.y - sin(n.f+self.f)*self.r
-			n.canvas_id = self.canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=self.UNBONDEDCOLOR)
+			if n.bonded:
+				n.canvas_id = canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=self.BONDEDCOLOR,fill=self.BONDEDCOLOR)
+			else:
+				n.canvas_id = canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=self.UNBONDEDCOLOR,fill=self.UNBONDEDCOLOR)
+
+
 
 	def limits(self):
 		if self.vx < -self.MAXVELOCITY: self.vx=-self.MAXVELOCITY
@@ -133,19 +134,6 @@ class Atom:
 			self.y  = self.y+self.vy
 			self.f  = self.f+self.vf
 			self.limits()
-
-
-
-	def move(self):
-		self.canvas.coords(self.id, self.x-self.r,self.y-self.r,self.x+self.r,self.y+self.r)
-		for n in self.nodes:
-			nx = self.x + cos(n.f+self.f)*self.r
-			ny = self.y - sin(n.f+self.f)*self.r
-			self.canvas.coords(n.canvas_id,nx-1,ny-1,nx+1,ny+1)
-			if n.bonded:
-				self.canvas.itemconfig(n.canvas_id,outline=self.BONDEDCOLOR,fill=self.BONDEDCOLOR)
-			if not n.bonded:
-				self.canvas.itemconfig(n.canvas_id,outline=self.UNBONDEDCOLOR,fill=self.UNBONDEDCOLOR)
 
 		
 
@@ -186,13 +174,15 @@ class Space:
 			os.makedirs('output')
 
 	def appendatom(self,a):
+		a.space = self
 		self.atoms.append(a)
-		a.draw(self)
+		#a.draw(self)
 
 	def appendmixer(self,n=1):
 		for i in range(0,n):
 			m = Atom(random.randint(1,self.WIDTH),random.randint(1,self.HEIGHT),10)
-			m.draw(self)
+			m.space = self
+			m.draw(self.canvas)
 			m.vx = 1
 			m.vy = 1
 			m.m = 20
@@ -326,12 +316,13 @@ class Space:
 			if self.action:
 				self.action(self)
 	
+			self.canvas.delete("all")
 			for i in range(0,N):
 				self.atoms[i].vx *= 0.9999
 				self.atoms[i].vy *= 0.9999
 				self.atoms[i].vf *= 0.99
 				self.atoms[i].next()
-				self.atoms[i].move()
+				self.atoms[i].draw(self.canvas)
 			
 			#  canvas.after(1)
 			#	if(time%1 ==0):  
