@@ -15,5 +15,5 @@ for i in range(0,15):
         space.appendatom(Atom(100+i*21,400,4,fixed=True,q=-1))
 
 space.appendmixer(1)
-space.competitive = True
+
 space.go()

@@ -22,5 +22,4 @@ for i in range(1,20):
 
 		space.appendatom(a)
 space.appendmixer(5)        
-space.competitive = True
 space.go()        

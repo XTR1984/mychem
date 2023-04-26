@@ -27,6 +27,6 @@ makesomething(150,250)
 space.appendmixer(10)
 #space.recording = True
 space.stoptime = 24*60*10
-space.export = True
+#space.export = True
 space.go()
 

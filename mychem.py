@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from cgitb import handler
 from time import sleep
 #from tkinter import *
 import tkinter
@@ -94,7 +95,9 @@ class Atom:
 			n2.f = PI/2
 			n3.f = PI
 			self.nodes.extend([n1,n2,n3])
-
+	def unbond(self):
+		for n in self.nodes:
+			n.unbond()
 	def draw(self,canvas):
 		self.canvas_id = canvas.create_oval(self.x-self.r,self.y-self.r,self.x+self.r,self.y+self.r,outline=self.color,fill=self.color)
 		for n in self.nodes:
@@ -158,7 +161,6 @@ class Space:
 		self.DETRACT_KOEFF1 = 15
 		self.DETRACT2 = 5
 		self.DETRACT_KOEFF2= 5
-		self.competitive = False
 		self.t = -1
 		self.atoms = []	
 		self.mixers = []
@@ -170,8 +172,15 @@ class Space:
 		self.stoptime = -1
 		self.pause = False
 		self.g = 0.01
+		self.newatom = None
+		self.createtype=4
+		self.createf = 0
 		self.root= tkinter.Tk()
 		self.gravity = tkinter.BooleanVar()
+		self.competitive = tkinter.BooleanVar()
+		self.adding_mode = False
+		self.moving_mode = False
+		self.competitive.set(True)
 		self.root.title("Mychem")
 		self.root.resizable(0, 0)
 		self.menu_bar = tkinter.Menu(self.root)
@@ -182,35 +191,161 @@ class Space:
 		file_menu.add_command(label="Exit", command=self.file_exit)
 		sim_menu = tkinter.Menu(self.menu_bar, tearoff=False)
 		sim_menu.add_command(label="Go/Pause", accelerator="Space",command=self.sim_pause)
+		sim_menu.add_checkbutton(label="Reset", accelerator="r", variable=self.gravity,command=self.reset)
 		sim_menu.add_checkbutton(label="Gravity", accelerator="g", variable=self.gravity,command=self.handle_g)
-		#sim_menu.add_command(label="Pause", command=self.sim_pause)
-		#sim_menu.add_command(label="Reset", command=self.sim_reset)
+		sim_menu.add_checkbutton(label="Competitive", accelerator="c", variable=self.competitive,command=self.handle_c)
+		add_menu = tkinter.Menu(self.menu_bar, tearoff=False)
+		add_menu.add_command(label="H", accelerator="1",command=lambda:self.handle_keypress(keysym="1"))
+		add_menu.add_command(label="O", accelerator="2",command=lambda:self.handle_keypress(keysym="2"))
+		add_menu.add_command(label="N", accelerator="3",command=lambda:self.handle_keypress(keysym="3"))
+		add_menu.add_command(label="C", accelerator="4",command=lambda:self.handle_keypress(keysym="4"))
+		add_menu.add_command(label="X", accelerator="5",command=lambda:self.handle_keypress(keysym="5"))
+		add_menu.add_command(label="Cancel", accelerator="Esc",command=self.handle_esc)
+		
+
 		self.menu_bar.add_cascade(label="File", menu=file_menu)
 		self.menu_bar.add_cascade(label="Simulation", menu=sim_menu)
+		self.menu_bar.add_cascade(label="Add", menu=add_menu)
+
 		self.root.config(menu=self.menu_bar)
-		#self.root.bind("<KeyPress>", self.handle_keypress)
+		
 		self.root.bind("<space>", self.handle_space)
+		self.root.bind("<Escape>", self.handle_esc)
 		self.root.bind("<g>", self.handle_g)
+		self.root.bind("<c>", self.handle_c)
+		self.root.bind("<Button-1>",self.handle_button1)
+		self.root.bind("<Button-3>",self.handle_esc)
+		self.root.bind("<KeyPress>", self.handle_keypress2)
+		self.root.bind("<Motion>", self.handle_motion)
+		self.root.bind("<MouseWheel>",self.handle_wheel)
 		self.frame = tkinter.Frame(self.root, bd=5, relief=tkinter.SUNKEN)
 		self.frame.pack()
 		self.canvas = tkinter.Canvas(self.frame, width=self.WIDTH, height=self.HEIGHT, bd=0, highlightthickness=0,background="black")
 		self.canvas.pack()
+		self.status_bar = StatusBar(self.root)
+		self.status_bar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
+		self.status_bar.set('Ready')
 		self.canvas.update()
 		if not os.path.exists('output'):
 			os.makedirs('output')
 	
-	def handle_space(self,event):
-		self.sim_pause()
+	def handle_keypress2(self,event=None):
+		self.handle_keypress(keysym=event.keysym)
+	
+	def handle_keypress(self,keysym=""):
+		if self.moving_mode:
+			self.drop_atom()
+		if keysym=='1':
+			self.createtype=1
+			self.adding_mode = True
+		if keysym=='2':
+			self.createtype=2
+			self.adding_mode = True
+		if keysym=='3':
+			self.createtype=3
+			self.adding_mode = True
+		if keysym=='4':
+			self.createtype=4
+			self.adding_mode = True
+		if keysym=='5':
+			self.createtype=5
+			self.adding_mode = True
+		if keysym=='r':			
+			self.reset()
+		if self.adding_mode:
+			self.status_bar.set("Adding element "+ str(self.createtype))
+			self.make_newatom()
+			self.update_canvas()
+		#print(event.keysym)
 
-	def handle_g(self,event):
-		if self.gravity.get():
-			self.gravity.set(False)
+	def handle_esc(self,event=None):
+		if self.moving_mode:
+			self.drop_atom()
+		if self.adding_mode:
+			self.newatom = None
+			self.adding_mode=False
+			self.update_canvas()
+
+	def make_newatom(self):
+			self.newatom = None
+			x = self.root.winfo_pointerx() - self.root.winfo_rootx()
+			y = self.root.winfo_pointery() - self.root.winfo_rooty()
+			cx = self.canvas.canvasx(x)
+			cy = self.canvas.canvasy(y)
+			self.newatom = Atom(cx,cy,self.createtype)
+
+	def drop_atom(self):
+		self.appendatom(self.newatom)
+		self.newatom=None
+		self.moving_mode = False
+		self.status_bar.set("Dropped")
+		self.update_canvas()
+
+	def handle_space(self,event=None):
+		self.sim_pause()
+		#self.adding_mode = False
+		if self.pause:
+			self.status_bar.set("Paused")
 		else:
-			self.gravity.set(True)
-	def handle_keypress(self,event):
-		if event.keysym == "32":
-			self.sim_pause()
-        	
+			self.status_bar.set("Running")
+
+	def handle_g(self,event=None):
+		self.gravity.set(not self.gravity.get())
+		self.status_bar.set("Gravity is "+ str(self.gravity.get()))
+
+	def handle_c(self,event):
+		self.competitive.set(not self.competitive.get())
+		self.status_bar.set("Competitive is "+ str(self.competitive.get()))
+
+	def handle_button1(self, event):
+		if self.adding_mode and not self.moving_mode:
+			#a= Atom(event.x,event.y, self.createtype)
+			self.appendatom(self.newatom)
+			self.make_newatom()
+			self.update_canvas()
+		if not(self.moving_mode or self.adding_mode):
+			print("move")
+			x, y = event.x, event.y
+			for a in self.atoms:
+				bbox = self.canvas.bbox(a.canvas_id)
+				if bbox[0] <= x <= bbox[2] and bbox[1] <= y <= bbox[3]:
+					a.unbond()
+					#remove from nears
+					#for i in range(0,len(self.atoms)):
+#						for j in range(0,len(self.atom[i].near)):
+					self.atoms.remove(a)
+					self.newatom = a
+					self.moving_mode = True
+					self.status_bar.set("Let's move")
+					break
+			self.update_canvas()
+          #  	break
+		elif self.moving_mode:
+			self.drop_atom()
+		
+	
+	def handle_motion(self,event=None):
+		if self.adding_mode or self.moving_mode:
+			x = self.root.winfo_pointerx() - self.root.winfo_rootx()
+			y = self.root.winfo_pointery() - self.root.winfo_rooty()
+			cx = self.canvas.canvasx(x)
+			cy = self.canvas.canvasy(y)
+			self.newatom.x=cx
+			self.newatom.y=cy
+			self.update_canvas()
+	
+	def handle_wheel(self,event=None):
+		if self.adding_mode or self.moving_mode:
+			if event.delta>0:
+				self.newatom.f += PI/18
+			else:
+				self.newatom.f -= PI/18
+			self.status_bar.set(str(event.delta))
+			self.update_canvas()
+
+
+
+
 
 	
 
@@ -218,19 +353,24 @@ class Space:
 		self.root.destroy()
 
 	def file_new(self):
+		self.t = -1
 		self.pause=True
 		self.atoms = []	
 		self.mixers = []
 		self.canvas.delete("all")
 		
 	def file_open(self):
-		self.file_new()
 		fileName = tkinter.filedialog.askopenfilename(title="Select file", filetypes=(("JSON files", "*.json"), ("All Files", "*.*")))
+		if not fileName:	
+			return
+		self.file_new()
 		f =  open(fileName,"r")		
 		#json = f.read()
 		self.resetjson = json.loads(f.read())
 		self.load_json(self.resetjson)
 		
+	def reset(self):
+		self.load_json(self.resetjson)
 	
 	def load_json(self, j):
 		self.atoms = []
@@ -243,11 +383,19 @@ class Space:
 			self.appendatom(aa)
 			if type == 100:
 				self.mixers.append(aa)
+		self.update_canvas()
 
+
+
+	def update_canvas(self):
 		self.canvas.delete("all")
 		N = len(self.atoms)
 		for i in range(0,N):
 			self.atoms[i].draw(self.canvas)
+
+		if self.adding_mode or self.moving_mode:
+			self.newatom.draw(self.canvas)
+
 
 
 	def file_save(self):
@@ -262,10 +410,7 @@ class Space:
 
 
 	def sim_pause(self):
-		if  self.pause:
-			self.pause=False
-		else:
-			self.pause=True
+		self.pause = not self.pause
 
 	def appendatom(self,a):
 		a.space = self
@@ -323,38 +468,40 @@ class Space:
 				return
 			N = len(self.atoms)
 			if N==0:
+				self.status_bar.set("Paused")
 				self.sim_pause()
 			self.t +=1
 			for i in range(0,N):
+				atom_i = self.atoms[i]
 				Ex=0
 				Ey=0
 				a = 0
 				if self.t%30==0:
 					for j in range(0,N):
+						atom_j = self.atoms[j]
 						a=0	
 						if i==j: continue
 			
-						delta_x = self.atoms[i].x-self.atoms[j].x
-						delta_y = self.atoms[i].y-self.atoms[j].y
+						delta_x = atom_i.x-atom_j.x
+						delta_y = atom_i.y-atom_j.y
 						r2 = delta_x*delta_x+ delta_y*delta_y
 						r = sqrt(r2)
-						if r<self.ATOMRADIUS*8 and not j in self.atoms[i].near:
-							self.atoms[i].near.append(j)
+						if r<self.ATOMRADIUS*8 and not atom_j in atom_i.near:
+							atom_i.near.append(atom_j)
 						if r>=self.ATOMRADIUS*8: 
 							try:
-								self.atoms[i].near.remove(j)
+								atom_i.near.remove(atom_j)
 							except:
 								pass
 
-				for j in self.atoms[i].near:
+				for atom_j in atom_i.near:
 					a=0	
-					if i==j: continue
 
-					delta_x = self.atoms[i].x-self.atoms[j].x
-					delta_y = self.atoms[i].y-self.atoms[j].y
+					delta_x = atom_i.x-atom_j.x
+					delta_y = atom_i.y-atom_j.y
 					r2 = delta_x*delta_x+ delta_y*delta_y
 					r = sqrt(r2)
-					SUMRADIUS = self.atoms[i].r+self.atoms[j].r
+					SUMRADIUS = atom_i.r+atom_j.r
 					AVGRADIUS = SUMRADIUS/2
 					#if r>self.ATOMRADIUS*5:continue
 					if r2 == 0:
@@ -369,28 +516,24 @@ class Space:
 
 					Ex = Ex + delta_x/r *a
 					Ey = Ey + delta_y/r *a
-					#if Ex>0.1: Ex=0.1
-					#if Ex<-0.1: Ex=-0.1
-					#if Ey>0.1: Ey=0.1
-					#if Ey<-0.1: Ey=-0.1
 					allnEx = 0
 					allnEy = 0
 					nvf = 0
 
-					Q = self.atoms[i].q*self.atoms[j].q
-					for n1 in self.atoms[i].nodes:
-						n1x = self.atoms[i].x + cos(n1.f+self.atoms[i].f)*self.atoms[i].r
-						n1y = self.atoms[i].y - sin(n1.f+self.atoms[i].f)*self.atoms[i].r
+					Q = atom_i.q*atom_j.q
+					for n1 in atom_i.nodes:
+						n1x = atom_i.x + cos(n1.f+atom_i.f)*atom_i.r
+						n1y = atom_i.y - sin(n1.f+atom_i.f)*atom_i.r
 
 						nEx = 0
 						nEy = 0
 						nvf = 0
-						for n2 in self.atoms[j].nodes:
-							n2x = self.atoms[j].x + cos(n2.f+self.atoms[j].f)*self.atoms[j].r
-							n2y = self.atoms[j].y - sin(n2.f+self.atoms[j].f)*self.atoms[j].r
+						for n2 in atom_j.nodes:
+							n2x = atom_j.x + cos(n2.f+atom_j.f)*atom_j.r
+							n2y = atom_j.y - sin(n2.f+atom_j.f)*atom_j.r
 							delta_x = n1x-n2x
 							delta_y = n1y-n2y
-							#delta_f = (n1.f-self.atoms[i].f) - (n2.f-self.atoms[j].f) 
+							#delta_f = (n1.f-atom_i.f) - (n2.f-atom_j.f) 
 							r2 = delta_x*delta_x + delta_y*delta_y
 							rn = sqrt(r2) 
 							if rn==0: continue
@@ -404,12 +547,12 @@ class Space:
 							if n1.pair == n2:
 								if (rn>0): 
 									a = -r2*self.BOND_KOEFF
-									nvf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+self.atoms[i].f)*self.atoms[i].r * delta_y + delta_x*sin(n1.f+self.atoms[i].f)*self.atoms[i].r)
-							#if not n1.bonded and not n2.bonded and rn<self.ATTRACTself.atoms[i].qR and r>self.ATOMRADIUS	:
-							elif self.competitive:
+									nvf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+atom_i.f)*atom_i.r * delta_y + delta_x*sin(n1.f+atom_i.f)*atom_i.r)
+							#if not n1.bonded and not n2.bonded and rn<self.ATTRACTatom_i.qR and r>self.ATOMRADIUS	:
+							elif self.competitive.get():
 								#a = -0.0005
 								a = 1/rn*self.ATTRACT_KOEFF*Q
-								nvf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+self.atoms[i].f)*self.atoms[i].r * delta_y + delta_x*sin(n1.f+self.atoms[i].f)*self.atoms[i].r)
+								nvf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+atom_i.f)*atom_i.r * delta_y + delta_x*sin(n1.f+atom_i.f)*atom_i.r)
 
 
 							nEx = nEx + delta_x/rn * a
@@ -417,7 +560,7 @@ class Space:
 
 						allnEx = allnEx + nEx
 						allnEy = allnEy + nEy
-						self.atoms[i].vf = self.atoms[i].vf + nvf
+						atom_i.vf = atom_i.vf + nvf
 
 					Ex+= allnEx
 					Ey+= allnEy
@@ -425,10 +568,10 @@ class Space:
 
 
 
-				self.atoms[i].ax= K*Ex/self.atoms[i].m 
-				self.atoms[i].ay= K*Ey/self.atoms[i].m				
+				atom_i.ax= K*Ex/atom_i.m 
+				atom_i.ay= K*Ey/atom_i.m				
 				if self.gravity.get():
-					self.atoms[i].ay +=self.g
+					atom_i.ay +=self.g
 				
 
 
@@ -450,11 +593,13 @@ class Space:
 	
 			self.canvas.delete("all")
 			for i in range(0,N):
-				self.atoms[i].vx *= 0.9999
-				self.atoms[i].vy *= 0.9999
-				self.atoms[i].vf *= 0.99
-				self.atoms[i].next()
-				self.atoms[i].draw(self.canvas)
+				atom_i=self.atoms[i]
+				atom_i.vx *= 0.9999
+				atom_i.vy *= 0.9999
+				atom_i.vf *= 0.99
+				atom_i.next()
+			
+			self.update_canvas()
 			
 			#  canvas.after(1)
 			#	if(time%1 ==0):  
@@ -476,6 +621,18 @@ class Space:
 				print(self.t)
 			self.root.after(1,self.mainloop)
   
+
+class StatusBar(tkinter.Frame):
+    def __init__(self, master):
+        super().__init__(master)
+        self.label = tkinter.Label(self, bd=1, relief=tkinter.SUNKEN, anchor=tkinter.W)
+        self.label.pack(fill=tkinter.X)
+    
+    def set(self, text):
+        self.label.config(text=text)
+    
+    def clear(self):
+        self.label.config(text='')
 
 if __name__ == "__main__":
 	random.seed(1)

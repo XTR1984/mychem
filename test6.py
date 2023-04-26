@@ -11,5 +11,6 @@ for i in range(1,150    ):
     space.appendatom(a1)
     space.appendatom(a2)
 #space.gravity = True
+#space.competitive = True
 space.appendmixer(5)
 space.go()
