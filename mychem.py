@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from time import sleep
-from tkinter import *
+#from tkinter import *
+import tkinter
+import tkinter.filedialog
 from math import *
 import random
 import os
@@ -78,7 +80,7 @@ class Atom:
 			self.color = "yellow"
 		if self.type==5:
 			self.color = "brown"
-		if self.type==10:
+		if self.type==100:
 			self.color = "magenta"
 
 		if self.type<5:
@@ -166,18 +168,104 @@ class Space:
 		self.export = False
 		self.export_file = "mychem.json"
 		self.stoptime = -1
+		self.pause = False
 		self.g = 0.01
-		self.gravity = False
-		self.root= Tk()
-		self.root.title("Particles")
+		self.root= tkinter.Tk()
+		self.gravity = tkinter.BooleanVar()
+		self.root.title("Mychem")
 		self.root.resizable(0, 0)
-		self.frame = Frame(self.root, bd=5, relief=SUNKEN)
+		self.menu_bar = tkinter.Menu(self.root)
+		file_menu = tkinter.Menu(self.menu_bar, tearoff=False)
+		file_menu.add_command(label="New", command=self.file_new)
+		file_menu.add_command(label="Open", command=self.file_open)
+		file_menu.add_command(label="Save", command=self.file_save)
+		file_menu.add_command(label="Exit", command=self.file_exit)
+		sim_menu = tkinter.Menu(self.menu_bar, tearoff=False)
+		sim_menu.add_command(label="Go/Pause", accelerator="Space",command=self.sim_pause)
+		sim_menu.add_checkbutton(label="Gravity", accelerator="g", variable=self.gravity,command=self.handle_g)
+		#sim_menu.add_command(label="Pause", command=self.sim_pause)
+		#sim_menu.add_command(label="Reset", command=self.sim_reset)
+		self.menu_bar.add_cascade(label="File", menu=file_menu)
+		self.menu_bar.add_cascade(label="Simulation", menu=sim_menu)
+		self.root.config(menu=self.menu_bar)
+		#self.root.bind("<KeyPress>", self.handle_keypress)
+		self.root.bind("<space>", self.handle_space)
+		self.root.bind("<g>", self.handle_g)
+		self.frame = tkinter.Frame(self.root, bd=5, relief=tkinter.SUNKEN)
 		self.frame.pack()
-		self.canvas = Canvas(self.frame, width=self.WIDTH, height=self.HEIGHT, bd=0, highlightthickness=0,background="black")
+		self.canvas = tkinter.Canvas(self.frame, width=self.WIDTH, height=self.HEIGHT, bd=0, highlightthickness=0,background="black")
 		self.canvas.pack()
 		self.canvas.update()
 		if not os.path.exists('output'):
 			os.makedirs('output')
+	
+	def handle_space(self,event):
+		self.sim_pause()
+
+	def handle_g(self,event):
+		if self.gravity.get():
+			self.gravity.set(False)
+		else:
+			self.gravity.set(True)
+	def handle_keypress(self,event):
+		if event.keysym == "32":
+			self.sim_pause()
+        	
+
+	
+
+	def file_exit(self):
+		self.root.destroy()
+
+	def file_new(self):
+		self.pause=True
+		self.atoms = []	
+		self.mixers = []
+		self.canvas.delete("all")
+		
+	def file_open(self):
+		self.file_new()
+		fileName = tkinter.filedialog.askopenfilename(title="Select file", filetypes=(("JSON files", "*.json"), ("All Files", "*.*")))
+		f =  open(fileName,"r")		
+		#json = f.read()
+		self.resetjson = json.loads(f.read())
+		self.load_json(self.resetjson)
+		
+	
+	def load_json(self, j):
+		self.atoms = []
+		self.mixers = []
+		for a in j["atoms"]:
+			type = a["type"]
+			aa = Atom(a["x"],a["y"],type=type,r=a["r"],q=a["q"],f=a["f"],m=a["m"])
+			aa.vx = a["vx"]
+			aa.vy = a["vy"]
+			self.appendatom(aa)
+			if type == 100:
+				self.mixers.append(aa)
+
+		self.canvas.delete("all")
+		N = len(self.atoms)
+		for i in range(0,N):
+			self.atoms[i].draw(self.canvas)
+
+
+	def file_save(self):
+		self.pause=True
+		fileName = tkinter.filedialog.asksaveasfilename(title="Save As", filetypes=(("JSON files", "*.json"), ("All Files", "*.*")))
+		if not (fileName.endswith(".json") or fileName.endswith(".JSON")):
+			fileName+=".json"
+		f = open(fileName, "w")
+		json = self.makejson()
+		f.write(json)
+		f.close()
+
+
+	def sim_pause(self):
+		if  self.pause:
+			self.pause=False
+		else:
+			self.pause=True
 
 	def appendatom(self,a):
 		a.space = self
@@ -186,7 +274,7 @@ class Space:
 
 	def appendmixer(self,n=1):
 		for i in range(0,n):
-			m = Atom(random.randint(1,self.WIDTH),random.randint(1,self.HEIGHT),10)
+			m = Atom(random.randint(1,self.WIDTH),random.randint(1,self.HEIGHT),100)
 			m.space = self
 			m.draw(self.canvas)
 			m.vx = 1
@@ -196,10 +284,11 @@ class Space:
 			self.activemixer = True
 			self.atoms.append(m)
 	
-	def do_export(self):
+	def makejson(self):
 		frame = {}
 		frame["time"] = self.t
 		frame["atoms"] = []
+		frame["mixers"] = []
 		N = len(self.atoms)
 		for i in range(0,N):
 			atom = {}
@@ -208,17 +297,33 @@ class Space:
 			atom["x"] = round(self.atoms[i].x,4)
 			atom["y"] = round(self.atoms[i].y,4)
 			atom["f"] = round(self.atoms[i].f,4)
+			atom["vx"] = round(self.atoms[i].vx,4)
+			atom["vy"] = round(self.atoms[i].vy,4)
+			atom["q"] = self.atoms[i].q
+			atom["m"] = self.atoms[i].m
 			atom["r"] = self.atoms[i].r
 			frame["atoms"].append(atom)
+		return json.dumps(frame)
+
+	def do_export(self):
 		if (not self.export):
 			self.exportf = open("output/" + self.export_file, "a")
-		self.exportf.write(json.dumps(frame)+"\n")
+		self.exportf.write(self.makejson+"\n")
 
 		#			j = 
+	
 	def go(self):	
-		K = 1
-		while(1):
+		self.root.after(1,self.mainloop)
+		self.root.mainloop()
+
+	def mainloop(self):
+			K = 1
+			if self.pause:
+				self.root.after(100,self.mainloop)
+				return
 			N = len(self.atoms)
+			if N==0:
+				self.sim_pause()
 			self.t +=1
 			for i in range(0,N):
 				Ex=0
@@ -322,7 +427,7 @@ class Space:
 
 				self.atoms[i].ax= K*Ex/self.atoms[i].m 
 				self.atoms[i].ay= K*Ey/self.atoms[i].m				
-				if self.gravity:
+				if self.gravity.get():
 					self.atoms[i].ay +=self.g
 				
 
@@ -355,31 +460,27 @@ class Space:
 			#	if(time%1 ==0):  
 			#		for i in range(0,N):	
 
-			if self.stoptime!= -1:
-				if self.t<self.stoptime:
-					self.canvas.update()
-					if self.recording:
-						save_widget_as_image(self.canvas,'output/'+str(self.t)+'.png')
-					if self.export:
-						self.do_export()
-
-				else:
-					sleep(1)
-					self.root.mainloop()
-			else:				
-				self.canvas.update()
-				if self.recording:
+			self.canvas.update()
+			if self.recording:
 					save_widget_as_image(self.canvas,'output/'+str(self.t)+'.png')
-				if self.export:
-						self.do_export()
+			if self.export:
+					self.do_export()
 
-
+			if self.stoptime!= -1:
+				if self.t>self.stoptime:
+					self.sim_pause()
 			
+
+
 			if self.t%100 ==0:
 				print(self.t)
-			#time.sleep(0.005)
+			self.root.after(1,self.mainloop)
   
 
-			
+if __name__ == "__main__":
+	random.seed(1)
+	space = Space()
+	space.go()
+
 
 
