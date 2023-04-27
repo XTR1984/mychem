@@ -25,6 +25,10 @@ def save_widget_as_image(widget, file_name):
     ),include_layered_windows=True).save(file_name)
 	#exit()
 
+def OnOff(b):
+	if b: return "On"
+	else: return "Off"
+
 
 class Node:
 	def __init__(self):
@@ -181,6 +185,12 @@ class Space:
 		self.competitive = tkinter.BooleanVar()
 		self.adding_mode = False
 		self.moving_mode = False
+		self.moving_offsetx = 0
+		self.moving_offsety = 0
+		self.merge_mode = False
+		self.recentdata = None
+		self.resetdata = None
+		self.merge_atoms = []
 		self.competitive.set(True)
 		self.root.title("Mychem")
 		self.root.resizable(0, 0)
@@ -188,6 +198,8 @@ class Space:
 		file_menu = tkinter.Menu(self.menu_bar, tearoff=False)
 		file_menu.add_command(label="New", accelerator="n", command=self.file_new)
 		file_menu.add_command(label="Open", accelerator="o", command=self.file_open)
+		file_menu.add_command(label="Merge", accelerator="m", command=self.file_merge)
+		file_menu.add_command(label="Merge recent", accelerator="l", command=self.file_merge_recent)
 		file_menu.add_command(label="Save", accelerator="s", command=self.file_save)
 		file_menu.add_command(label="Exit", command=self.file_exit)
 		sim_menu = tkinter.Menu(self.menu_bar, tearoff=False)
@@ -218,6 +230,8 @@ class Space:
 		self.root.bind("<g>", self.handle_g)
 		self.root.bind("<c>", self.handle_c)
 		self.root.bind("<n>", self.file_new)
+		self.root.bind("<m>", self.file_merge)
+		self.root.bind("<l>", self.file_merge_recent)
 		self.root.bind("<o>", self.file_open)
 		self.root.bind("<s>", self.file_save)
 		self.root.bind("<Button-1>",self.handle_button1)
@@ -292,11 +306,12 @@ class Space:
 
 	def make_newatom(self):
 			self.newatom = None
-			x = self.root.winfo_pointerx() - self.root.winfo_rootx()
-			y = self.root.winfo_pointery() - self.root.winfo_rooty()
+			x = self.root.winfo_pointerx() - self.canvas.winfo_rootx()
+			y = self.root.winfo_pointery() - self.canvas.winfo_rooty()
 			cx = self.canvas.canvasx(x)
 			cy = self.canvas.canvasy(y)
 			if not self.standard:
+				r = 10
 				self.newatom = Atom(cx,cy,self.createtype,f=self.createf)
 			else:
 				if self.createtype==1:
@@ -328,7 +343,7 @@ class Space:
 				self.newatom = Atom(cx,cy,self.createtype,f=self.createf,m=m,q=q,r=r)
 
 	def drop_atom(self):
-		self.appendatom(self.newatom)
+		#self.appendatom(self.newatom)
 		self.newatom=None
 		self.moving_mode = False
 		self.status_bar.set("Dropped")
@@ -344,11 +359,11 @@ class Space:
 
 	def handle_g(self,event=None):
 		self.gravity.set(not self.gravity.get())
-		self.status_bar.set("Gravity is "+ str(self.gravity.get()))
+		self.status_bar.set("Gravity is "+ OnOff(self.gravity.get()))
 
 	def handle_c(self,event):
 		self.competitive.set(not self.competitive.get())
-		self.status_bar.set("Competitive is "+ str(self.competitive.get()))
+		self.status_bar.set("Competitive is "+ OnOff(self.competitive.get()))
 
 	def handle_button1(self, event):
 		if self.adding_mode and not self.moving_mode:
@@ -360,16 +375,18 @@ class Space:
 				self.mixers.append(self.newatom)
 			self.make_newatom()
 			self.update_canvas()
-		if not(self.moving_mode or self.adding_mode):
+		if not(self.moving_mode or self.adding_mode or self.merge_mode):
 			x, y = event.x, event.y
 			for a in self.atoms:
 				bbox = self.canvas.bbox(a.canvas_id)
 				if bbox[0] <= x <= bbox[2] and bbox[1] <= y <= bbox[3]:
-					a.unbond()
+					#a.unbond()
 					#remove from nears
 					#for i in range(0,len(self.atoms)):
 #						for j in range(0,len(self.atom[i].near)):
-					self.atoms.remove(a)
+					#self.atoms.remove(a)
+					self.moving_offsetx = a.x-event.x
+					self.moving_offsety = a.y-event.y
 					self.newatom = a
 					self.moving_mode = True
 					self.status_bar.set("Let's move")
@@ -378,17 +395,37 @@ class Space:
           #  	break
 		elif self.moving_mode:
 			self.drop_atom()
-		
+		elif self.merge_mode:
+			self.merge_mode=False
+			self.atoms.extend(self.merge_atoms)
+			self.merge_atoms = []
+			self.canvas.configure(cursor="tcross")
+			self.update_canvas()
+			self.status_bar.set("Merge finished")
 	
 	def handle_motion(self,event=None):
 		if self.adding_mode or self.moving_mode:
-			x = self.root.winfo_pointerx() - self.root.winfo_rootx()
-			y = self.root.winfo_pointery() - self.root.winfo_rooty()
+			x = self.root.winfo_pointerx() - self.canvas.winfo_rootx()
+			y = self.root.winfo_pointery() - self.canvas.winfo_rooty()
 			cx = self.canvas.canvasx(x)
 			cy = self.canvas.canvasy(y)
-			self.newatom.x=cx
-			self.newatom.y=cy
+			self.newatom.x=cx+self.moving_offsetx
+			self.newatom.y=cy+self.moving_offsety
+			if self.pause:
+				self.update_canvas()
+		if self.merge_mode:
+			x = self.root.winfo_pointerx() - self.canvas.winfo_rootx()
+			y = self.root.winfo_pointery() - self.canvas.winfo_rooty()
+			cx = self.canvas.canvasx(x)
+			cy = self.canvas.canvasy(y)
+			for a in self.merge_atoms:
+				a.x = a.x - self.merge_offsetx + cx
+				a.y = a.y - self.merge_offsety + cy
+			self.merge_offsetx = cx
+			self.merge_offsety = cy
 			self.update_canvas()
+
+
 	
 	def handle_wheel(self,event=None):
 		if self.adding_mode or self.moving_mode:
@@ -415,32 +452,75 @@ class Space:
 		self.mixers = []
 		self.canvas.delete("all")
 		self.status_bar.set("New file")
+
+	def file_merge(self,event=None):
+		self.sim_pause()
+		fileName = tkinter.filedialog.askopenfilename(title="Select file", filetypes=(("JSON files", "*.json"), ("All Files", "*.*")))
+		if not fileName:	
+			return
+		f =  open(fileName,"r")		
+		self.merge_atoms = []
+		self.merge_offsetx = self.WIDTH/2
+		self.merge_offsety = self.HEIGHT/2
+		mergedata = json.loads(f.read())
+		self.recentdata = mergedata
+		self.load_data(mergedata, merge=True)
+		self.merge_mode=True
+		self.canvas.configure(cursor="hand2")
+		self.status_bar.set("Merging mode")
+		#self.update_canvas()
+
+	def file_merge_recent(self,event=None):
+		if not self.recentdata:
+			return
+		self.sim_pause()
+		self.merge_atoms = []
+		self.merge_offsetx = self.WIDTH/2
+		self.merge_offsety = self.HEIGHT/2
+		self.load_data(self.recentdata, merge=True)
+		self.merge_mode=True
+		self.canvas.configure(cursor="hand2")
+		self.status_bar.set("Merging mode")
+		#self.update_canvas()
+
 		
+
+
 	def file_open(self,event=None):
 		fileName = tkinter.filedialog.askopenfilename(title="Select file", filetypes=(("JSON files", "*.json"), ("All Files", "*.*")))
 		if not fileName:	
 			return
 		self.file_new()
 		f =  open(fileName,"r")		
-		#json = f.read()
 		self.resetdata = json.loads(f.read())
 		self.load_data(self.resetdata)
 		self.status_bar.set("File loaded")
 		
 	def reset(self):
+		if not self.resetdata:
+			return
 		self.file_new()
 		self.load_data(self.resetdata)
 		self.status_bar.set("Reset to previos loaded")
 	
-	def load_data(self, j):
-		self.atoms = []
-		self.mixers = []
+	def load_data(self, j, merge=False):
+		if not merge: 
+			self.atoms = []
+			self.mixers = []
 		for a in j["atoms"]:
 			type = a["type"]
-			aa = Atom(a["x"],a["y"],type=type,r=a["r"],q=a["q"],f=a["f"],m=a["m"])
+			aa = Atom(a["x"],a["y"],type=type)
 			aa.vx = a["vx"]
 			aa.vy = a["vy"]
-			self.appendatom(aa)
+			aa.r=a["r"]
+			aa.q=a["q"]
+			aa.f=a["f"]
+			aa.m=a["m"]
+			if merge:
+				aa.space = self
+				self.merge_atoms.append(aa)
+			else:
+				self.appendatom(aa)
 			if type == 100:
 				self.mixers.append(aa)
 		self.update_canvas()
@@ -449,12 +529,14 @@ class Space:
 
 	def update_canvas(self):
 		self.canvas.delete("all")
-		N = len(self.atoms)
-		for i in range(0,N):
-			self.atoms[i].draw(self.canvas)
+		for a in self.atoms:
+			a.draw(self.canvas)
 
 		if self.adding_mode or self.moving_mode:
 			self.newatom.draw(self.canvas)
+		if self.merge_mode:
+			for a in self.merge_atoms:
+				a.draw(self.canvas)
 
 
 
@@ -519,7 +601,7 @@ class Space:
 	def do_export(self):
 		if (not self.export):
 			self.exportf = open("output/" + self.export_file, "a")
-		self.exportf.write(self.make_data()+"\n")
+		self.exportf.write(self.make_export()+"\n")
 
 		#			j = 
 	
@@ -561,7 +643,6 @@ class Space:
 
 				for atom_j in atom_i.near:
 					a=0	
-
 					delta_x = atom_i.x-atom_j.x
 					delta_y = atom_i.y-atom_j.y
 					r2 = delta_x*delta_x+ delta_y*delta_y
@@ -629,18 +710,10 @@ class Space:
 
 					Ex+= allnEx
 					Ey+= allnEy
-
-
-
-
 				atom_i.ax= K*Ex/atom_i.m 
 				atom_i.ay= K*Ey/atom_i.m				
 				if self.gravity.get():
 					atom_i.ay +=self.g
-				
-
-
-		
 
 			if self.activemixer:
 				for m in self.mixers:
@@ -655,8 +728,16 @@ class Space:
 
 			if self.action:
 				self.action(self)
-	
-			self.canvas.delete("all")
+
+			if self.moving_mode:
+				x = self.root.winfo_pointerx() - self.canvas.winfo_rootx()
+				y = self.root.winfo_pointery() - self.canvas.winfo_rooty()
+				cx = self.canvas.canvasx(x)
+				cy = self.canvas.canvasy(y)
+				self.newatom.x=cx + self.moving_offsetx
+				self.newatom.y=cy + self.moving_offsety
+
+
 			for i in range(0,N):
 				atom_i=self.atoms[i]
 				atom_i.vx *= 0.9999
@@ -683,21 +764,28 @@ class Space:
 
 
 			if self.t%100 ==0:
-				print(self.t)
+				self.status_bar.settime(self.t)
 			self.root.after(1,self.mainloop)
   
 
 class StatusBar(tkinter.Frame):
-    def __init__(self, master):
-        super().__init__(master)
-        self.label = tkinter.Label(self, bd=1, relief=tkinter.SUNKEN, anchor=tkinter.W)
-        self.label.pack(fill=tkinter.X)
+	def __init__(self, master):
+		super().__init__(master)
+		status_frame = tkinter.Frame(master, bd=1, relief=tkinter.SUNKEN)
+		status_frame.pack(side=tkinter.BOTTOM, fill=tkinter.X)
+		self.label = tkinter.Label(status_frame, text= "Status")
+		self.label.pack(side=tkinter.LEFT)
+		self.timelabel = tkinter.Label(status_frame, text="Time")
+		self.timelabel.pack(side=tkinter.RIGHT)
     
-    def set(self, text):
-        self.label.config(text=text)
+	def set(self, text):
+		self.label.config(text=text)
+
+	def settime(self,t):
+		self.timelabel.config(text=str(t))
     
-    def clear(self):
-        self.label.config(text='')
+	def clear(self):
+		self.label.config(text='')
 
 if __name__ == "__main__":
 	random.seed(1)
