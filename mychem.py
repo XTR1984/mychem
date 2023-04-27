@@ -314,6 +314,7 @@ class Space:
 			self.update_canvas()
 	def handle_del(self,event=None):
 		if self.moving_mode:
+			self.atoms.remove(self.newatom)
 			self.newatom=None
 			self.moving_mode = False
 			self.status_bar.set("Deleted")
