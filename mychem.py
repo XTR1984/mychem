@@ -185,13 +185,13 @@ class Space:
 		self.root.resizable(0, 0)
 		self.menu_bar = tkinter.Menu(self.root)
 		file_menu = tkinter.Menu(self.menu_bar, tearoff=False)
-		file_menu.add_command(label="New", command=self.file_new)
-		file_menu.add_command(label="Open", command=self.file_open)
+		file_menu.add_command(label="New", accelerator="n", command=self.file_new)
+		file_menu.add_command(label="Open", accelerator="o", command=self.file_open)
 		file_menu.add_command(label="Save", command=self.file_save)
 		file_menu.add_command(label="Exit", command=self.file_exit)
 		sim_menu = tkinter.Menu(self.menu_bar, tearoff=False)
-		sim_menu.add_command(label="Go/Pause", accelerator="Space",command=self.sim_pause)
-		sim_menu.add_checkbutton(label="Reset", accelerator="r", variable=self.gravity,command=self.reset)
+		sim_menu.add_command(label="Go/Pause", accelerator="Space",command=self.handle_space)
+		sim_menu.add_command(label="Reset", accelerator="r",command=self.reset)
 		sim_menu.add_checkbutton(label="Gravity", accelerator="g", variable=self.gravity,command=self.handle_g)
 		sim_menu.add_checkbutton(label="Competitive", accelerator="c", variable=self.competitive,command=self.handle_c)
 		add_menu = tkinter.Menu(self.menu_bar, tearoff=False)
@@ -200,6 +200,7 @@ class Space:
 		add_menu.add_command(label="N", accelerator="3",command=lambda:self.handle_keypress(keysym="3"))
 		add_menu.add_command(label="C", accelerator="4",command=lambda:self.handle_keypress(keysym="4"))
 		add_menu.add_command(label="X", accelerator="5",command=lambda:self.handle_keypress(keysym="5"))
+		add_menu.add_command(label="Mixer", accelerator="0",command=lambda:self.handle_keypress(keysym="0"))
 		add_menu.add_command(label="Cancel", accelerator="Esc",command=self.handle_esc)
 		
 
@@ -213,6 +214,8 @@ class Space:
 		self.root.bind("<Escape>", self.handle_esc)
 		self.root.bind("<g>", self.handle_g)
 		self.root.bind("<c>", self.handle_c)
+		self.root.bind("<n>", self.file_new)
+		self.root.bind("<o>", self.file_open)
 		self.root.bind("<Button-1>",self.handle_button1)
 		self.root.bind("<Button-3>",self.handle_esc)
 		self.root.bind("<KeyPress>", self.handle_keypress2)
@@ -250,6 +253,15 @@ class Space:
 		if keysym=='5':
 			self.createtype=5
 			self.adding_mode = True
+		if keysym=='5':
+			self.createtype=5
+			self.adding_mode = True
+		if keysym=='5':
+			self.createtype=5
+			self.adding_mode = True
+		if keysym=='0':
+			self.createtype=100
+			self.adding_mode = True
 		if keysym=='r':			
 			self.reset()
 		if self.adding_mode:
@@ -281,13 +293,13 @@ class Space:
 		self.status_bar.set("Dropped")
 		self.update_canvas()
 
+
 	def handle_space(self,event=None):
-		self.sim_pause()
 		#self.adding_mode = False
 		if self.pause:
-			self.status_bar.set("Paused")
+			self.sim_run()
 		else:
-			self.status_bar.set("Running")
+			self.sim_pause()
 
 	def handle_g(self,event=None):
 		self.gravity.set(not self.gravity.get())
@@ -301,10 +313,14 @@ class Space:
 		if self.adding_mode and not self.moving_mode:
 			#a= Atom(event.x,event.y, self.createtype)
 			self.appendatom(self.newatom)
+			if self.newatom.type==100:
+				self.newatom.m=20
+				self.activemixer = True
+
+				self.mixers.append(self.newatom)
 			self.make_newatom()
 			self.update_canvas()
 		if not(self.moving_mode or self.adding_mode):
-			print("move")
 			x, y = event.x, event.y
 			for a in self.atoms:
 				bbox = self.canvas.bbox(a.canvas_id)
@@ -352,14 +368,15 @@ class Space:
 	def file_exit(self):
 		self.root.destroy()
 
-	def file_new(self):
+	def file_new(self,event=None):
 		self.t = -1
 		self.pause=True
 		self.atoms = []	
 		self.mixers = []
 		self.canvas.delete("all")
+		self.status_bar.set("New file")
 		
-	def file_open(self):
+	def file_open(self,event=None):
 		fileName = tkinter.filedialog.askopenfilename(title="Select file", filetypes=(("JSON files", "*.json"), ("All Files", "*.*")))
 		if not fileName:	
 			return
@@ -368,9 +385,12 @@ class Space:
 		#json = f.read()
 		self.resetjson = json.loads(f.read())
 		self.load_json(self.resetjson)
+		self.status_bar.set("File loaded")
 		
 	def reset(self):
+		self.file_new()
 		self.load_json(self.resetjson)
+		self.status_bar.set("Reset to previos loaded")
 	
 	def load_json(self, j):
 		self.atoms = []
@@ -407,10 +427,16 @@ class Space:
 		json = self.makejson()
 		f.write(json)
 		f.close()
+		self.status_bar.set("File saved")
 
+
+	def sim_run(self):
+		self.pause = False
+		self.status_bar.set("Running")
 
 	def sim_pause(self):
-		self.pause = not self.pause
+		self.pause = True
+		self.status_bar.set("Paused")
 
 	def appendatom(self,a):
 		a.space = self
@@ -468,7 +494,6 @@ class Space:
 				return
 			N = len(self.atoms)
 			if N==0:
-				self.status_bar.set("Paused")
 				self.sim_pause()
 			self.t +=1
 			for i in range(0,N):
