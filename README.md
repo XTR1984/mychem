@@ -1,10 +1,10 @@
-Pseudochemical simulator on python 
-- tkinter used
+Pseudochemical 2d sandbox
+- python tkinter used
 - no acceleration
 - minimal features by now
 
 for use need to install Pillow with
-    python -m pip install pillow
+- python -m pip install pillow
 
 Some examples:
 

@@ -175,6 +175,7 @@ class Space:
 		self.newatom = None
 		self.createtype=4
 		self.createf = 0
+		self.standard = True
 		self.root= tkinter.Tk()
 		self.gravity = tkinter.BooleanVar()
 		self.competitive = tkinter.BooleanVar()
@@ -187,7 +188,7 @@ class Space:
 		file_menu = tkinter.Menu(self.menu_bar, tearoff=False)
 		file_menu.add_command(label="New", accelerator="n", command=self.file_new)
 		file_menu.add_command(label="Open", accelerator="o", command=self.file_open)
-		file_menu.add_command(label="Save", command=self.file_save)
+		file_menu.add_command(label="Save", accelerator="s", command=self.file_save)
 		file_menu.add_command(label="Exit", command=self.file_exit)
 		sim_menu = tkinter.Menu(self.menu_bar, tearoff=False)
 		sim_menu.add_command(label="Go/Pause", accelerator="Space",command=self.handle_space)
@@ -201,6 +202,7 @@ class Space:
 		add_menu.add_command(label="C", accelerator="4",command=lambda:self.handle_keypress(keysym="4"))
 		add_menu.add_command(label="X", accelerator="5",command=lambda:self.handle_keypress(keysym="5"))
 		add_menu.add_command(label="Mixer", accelerator="0",command=lambda:self.handle_keypress(keysym="0"))
+		add_menu.add_command(label="Delete", accelerator="Delete",command=self.handle_del)
 		add_menu.add_command(label="Cancel", accelerator="Esc",command=self.handle_esc)
 		
 
@@ -212,10 +214,12 @@ class Space:
 		
 		self.root.bind("<space>", self.handle_space)
 		self.root.bind("<Escape>", self.handle_esc)
+		self.root.bind("<Delete>", self.handle_del)
 		self.root.bind("<g>", self.handle_g)
 		self.root.bind("<c>", self.handle_c)
 		self.root.bind("<n>", self.file_new)
 		self.root.bind("<o>", self.file_open)
+		self.root.bind("<s>", self.file_save)
 		self.root.bind("<Button-1>",self.handle_button1)
 		self.root.bind("<Button-3>",self.handle_esc)
 		self.root.bind("<KeyPress>", self.handle_keypress2)
@@ -224,6 +228,7 @@ class Space:
 		self.frame = tkinter.Frame(self.root, bd=5, relief=tkinter.SUNKEN)
 		self.frame.pack()
 		self.canvas = tkinter.Canvas(self.frame, width=self.WIDTH, height=self.HEIGHT, bd=0, highlightthickness=0,background="black")
+		self.canvas.configure(cursor="tcross")
 		self.canvas.pack()
 		self.status_bar = StatusBar(self.root)
 		self.status_bar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
@@ -277,6 +282,13 @@ class Space:
 			self.newatom = None
 			self.adding_mode=False
 			self.update_canvas()
+	def handle_del(self,event=None):
+		if self.moving_mode:
+			self.newatom=None
+			self.moving_mode = False
+			self.status_bar.set("Deleted")
+			self.update_canvas()
+
 
 	def make_newatom(self):
 			self.newatom = None
@@ -284,7 +296,36 @@ class Space:
 			y = self.root.winfo_pointery() - self.root.winfo_rooty()
 			cx = self.canvas.canvasx(x)
 			cy = self.canvas.canvasy(y)
-			self.newatom = Atom(cx,cy,self.createtype)
+			if not self.standard:
+				self.newatom = Atom(cx,cy,self.createtype,f=self.createf)
+			else:
+				if self.createtype==1:
+					r = 6
+					m = 1
+					q = 1
+				elif self.createtype==2:
+					r = 8
+					m = 16
+					q = -1
+				elif self.createtype==3:
+					r = 9
+					m = 14
+					q = -1
+				elif self.createtype==4:
+					m = 12
+					r = 10
+					q = -1
+				elif self.createtype==5:
+					m = 10
+					r = 10
+					q = 1
+
+				elif self.createtype==100:
+					m=40
+					r=10
+					q = 1
+
+				self.newatom = Atom(cx,cy,self.createtype,f=self.createf,m=m,q=q,r=r)
 
 	def drop_atom(self):
 		self.appendatom(self.newatom)
@@ -313,10 +354,9 @@ class Space:
 		if self.adding_mode and not self.moving_mode:
 			#a= Atom(event.x,event.y, self.createtype)
 			self.appendatom(self.newatom)
+			self.createf = self.newatom.f
 			if self.newatom.type==100:
-				self.newatom.m=20
 				self.activemixer = True
-
 				self.mixers.append(self.newatom)
 			self.make_newatom()
 			self.update_canvas()
@@ -383,16 +423,16 @@ class Space:
 		self.file_new()
 		f =  open(fileName,"r")		
 		#json = f.read()
-		self.resetjson = json.loads(f.read())
-		self.load_json(self.resetjson)
+		self.resetdata = json.loads(f.read())
+		self.load_data(self.resetdata)
 		self.status_bar.set("File loaded")
 		
 	def reset(self):
 		self.file_new()
-		self.load_json(self.resetjson)
+		self.load_data(self.resetdata)
 		self.status_bar.set("Reset to previos loaded")
 	
-	def load_json(self, j):
+	def load_data(self, j):
 		self.atoms = []
 		self.mixers = []
 		for a in j["atoms"]:
@@ -418,14 +458,14 @@ class Space:
 
 
 
-	def file_save(self):
+	def file_save(self,event=None):
 		self.pause=True
 		fileName = tkinter.filedialog.asksaveasfilename(title="Save As", filetypes=(("JSON files", "*.json"), ("All Files", "*.*")))
 		if not (fileName.endswith(".json") or fileName.endswith(".JSON")):
 			fileName+=".json"
 		f = open(fileName, "w")
-		json = self.makejson()
-		f.write(json)
+		self.resetdata = self.make_export()
+		f.write(json.dumps(self.resetdata))
 		f.close()
 		self.status_bar.set("File saved")
 
@@ -450,12 +490,12 @@ class Space:
 			m.draw(self.canvas)
 			m.vx = 1
 			m.vy = 1
-			m.m = 20
+			m.m = 40
 			self.mixers.append(m)
 			self.activemixer = True
 			self.atoms.append(m)
 	
-	def makejson(self):
+	def make_export(self):
 		frame = {}
 		frame["time"] = self.t
 		frame["atoms"] = []
@@ -474,12 +514,12 @@ class Space:
 			atom["m"] = self.atoms[i].m
 			atom["r"] = self.atoms[i].r
 			frame["atoms"].append(atom)
-		return json.dumps(frame)
+		return frame
 
 	def do_export(self):
 		if (not self.export):
 			self.exportf = open("output/" + self.export_file, "a")
-		self.exportf.write(self.makejson+"\n")
+		self.exportf.write(self.make_data()+"\n")
 
 		#			j = 
 	
