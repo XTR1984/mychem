@@ -29,6 +29,13 @@ def OnOff(b):
 	if b: return "On"
 	else: return "Off"
 
+def getpointer(self):
+				x = self.root.winfo_pointerx() - self.canvas.winfo_rootx()
+				y = self.root.winfo_pointery() - self.canvas.winfo_rooty()
+				cx = self.canvas.canvasx(x)
+				cy = self.canvas.canvasy(y)
+				return (cx,cy)
+
 
 class Node:
 	def __init__(self):
@@ -185,6 +192,7 @@ class Space:
 		self.competitive = tkinter.BooleanVar()
 		self.adding_mode = False
 		self.moving_mode = False
+		self.changed = False
 		self.moving_offsetx = 0
 		self.moving_offsety = 0
 		self.merge_mode = False
@@ -247,10 +255,18 @@ class Space:
 		self.status_bar = StatusBar(self.root)
 		self.status_bar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
 		self.status_bar.set('Ready')
-		self.canvas.update()
+		#self.canvas.update()
 		if not os.path.exists('output'):
 			os.makedirs('output')
-	
+
+	def getpointer(self):
+				x = self.root.winfo_pointerx() - self.canvas.winfo_rootx()
+				y = self.root.winfo_pointery() - self.canvas.winfo_rooty()
+				cx = self.canvas.canvasx(x)
+				cy = self.canvas.canvasy(y)
+				return (cx,cy)
+
+
 	def handle_keypress2(self,event=None):
 		self.handle_keypress(keysym=event.keysym)
 	
@@ -306,10 +322,7 @@ class Space:
 
 	def make_newatom(self):
 			self.newatom = None
-			x = self.root.winfo_pointerx() - self.canvas.winfo_rootx()
-			y = self.root.winfo_pointery() - self.canvas.winfo_rooty()
-			cx = self.canvas.canvasx(x)
-			cy = self.canvas.canvasy(y)
+			(cx,cy) = self.getpointer()
 			if not self.standard:
 				r = 10
 				self.newatom = Atom(cx,cy,self.createtype,f=self.createf)
@@ -344,6 +357,8 @@ class Space:
 
 	def drop_atom(self):
 		#self.appendatom(self.newatom)
+		self.newatom.vx=0
+		self.newatom.vy=0
 		self.newatom=None
 		self.moving_mode = False
 		self.status_bar.set("Dropped")
@@ -405,10 +420,7 @@ class Space:
 	
 	def handle_motion(self,event=None):
 		if self.adding_mode or self.moving_mode:
-			x = self.root.winfo_pointerx() - self.canvas.winfo_rootx()
-			y = self.root.winfo_pointery() - self.canvas.winfo_rooty()
-			cx = self.canvas.canvasx(x)
-			cy = self.canvas.canvasy(y)
+			(cx,cy) = self.getpointer()
 			self.newatom.x=cx+self.moving_offsetx
 			self.newatom.y=cy+self.moving_offsety
 			if self.pause:
@@ -423,9 +435,8 @@ class Space:
 				a.y = a.y - self.merge_offsety + cy
 			self.merge_offsetx = cx
 			self.merge_offsety = cy
+			self.changed=True
 			self.update_canvas()
-
-
 	
 	def handle_wheel(self,event=None):
 		if self.adding_mode or self.moving_mode:
@@ -437,14 +448,6 @@ class Space:
 			self.update_canvas()
 
 
-
-
-
-	
-
-	def file_exit(self):
-		self.root.destroy()
-
 	def file_new(self,event=None):
 		self.t = -1
 		self.pause=True
@@ -452,6 +455,41 @@ class Space:
 		self.mixers = []
 		self.canvas.delete("all")
 		self.status_bar.set("New file")
+
+
+
+	def load_data(self, j, merge=False):
+		if not merge: 
+			self.atoms = []
+			self.mixers = []
+		for a in j["atoms"]:
+			type = a["type"]
+			aa = Atom(a["x"],a["y"],type=type)
+			aa.vx = a["vx"]
+			aa.vy = a["vy"]
+			aa.r=a["r"]
+			aa.q=a["q"]
+			aa.f=a["f"]
+			aa.m=a["m"]
+			if merge:
+				aa.space = self
+				self.merge_atoms.append(aa)
+			else:
+				self.appendatom(aa)
+			if type == 100:
+				self.mixers.append(aa)
+		self.update_canvas()
+
+
+	def file_open(self,event=None):
+		fileName = tkinter.filedialog.askopenfilename(title="Select file", filetypes=(("JSON files", "*.json"), ("All Files", "*.*")))
+		if not fileName:	
+			return
+		self.file_new()
+		f =  open(fileName,"r")		
+		self.resetdata = json.loads(f.read())
+		self.load_data(self.resetdata)
+		self.status_bar.set("File loaded")
 
 	def file_merge(self,event=None):
 		self.sim_pause()
@@ -483,18 +521,10 @@ class Space:
 		self.status_bar.set("Merging mode")
 		#self.update_canvas()
 
-		
+	def file_exit(self):
+		self.root.destroy()
 
 
-	def file_open(self,event=None):
-		fileName = tkinter.filedialog.askopenfilename(title="Select file", filetypes=(("JSON files", "*.json"), ("All Files", "*.*")))
-		if not fileName:	
-			return
-		self.file_new()
-		f =  open(fileName,"r")		
-		self.resetdata = json.loads(f.read())
-		self.load_data(self.resetdata)
-		self.status_bar.set("File loaded")
 		
 	def reset(self):
 		if not self.resetdata:
@@ -503,27 +533,6 @@ class Space:
 		self.load_data(self.resetdata)
 		self.status_bar.set("Reset to previos loaded")
 	
-	def load_data(self, j, merge=False):
-		if not merge: 
-			self.atoms = []
-			self.mixers = []
-		for a in j["atoms"]:
-			type = a["type"]
-			aa = Atom(a["x"],a["y"],type=type)
-			aa.vx = a["vx"]
-			aa.vy = a["vy"]
-			aa.r=a["r"]
-			aa.q=a["q"]
-			aa.f=a["f"]
-			aa.m=a["m"]
-			if merge:
-				aa.space = self
-				self.merge_atoms.append(aa)
-			else:
-				self.appendatom(aa)
-			if type == 100:
-				self.mixers.append(aa)
-		self.update_canvas()
 
 
 
@@ -623,7 +632,7 @@ class Space:
 				Ex=0
 				Ey=0
 				a = 0
-				if self.t%30==0:
+				if self.t%30==0 or self.changed==True:
 					for j in range(0,N):
 						atom_j = self.atoms[j]
 						a=0	
@@ -631,7 +640,7 @@ class Space:
 			
 						delta_x = atom_i.x-atom_j.x
 						delta_y = atom_i.y-atom_j.y
-						r2 = delta_x*delta_x+ delta_y*delta_y
+						r2 = delta_x*delta_x + delta_y*delta_y
 						r = sqrt(r2)
 						if r<self.ATOMRADIUS*8 and not atom_j in atom_i.near:
 							atom_i.near.append(atom_j)
@@ -730,10 +739,7 @@ class Space:
 				self.action(self)
 
 			if self.moving_mode:
-				x = self.root.winfo_pointerx() - self.canvas.winfo_rootx()
-				y = self.root.winfo_pointery() - self.canvas.winfo_rooty()
-				cx = self.canvas.canvasx(x)
-				cy = self.canvas.canvasy(y)
+				(cx,cy) = self.getpointer()
 				self.newatom.x=cx + self.moving_offsetx
 				self.newatom.y=cy + self.moving_offsety
 
@@ -765,6 +771,7 @@ class Space:
 
 			if self.t%100 ==0:
 				self.status_bar.settime(self.t)
+				self.status_bar.setinfo("Number of atoms: "+str(N))
 			self.root.after(1,self.mainloop)
   
 
@@ -777,12 +784,21 @@ class StatusBar(tkinter.Frame):
 		self.label.pack(side=tkinter.LEFT)
 		self.timelabel = tkinter.Label(status_frame, text="Time")
 		self.timelabel.pack(side=tkinter.RIGHT)
+		self.info = tkinter.Label(status_frame, text="Info")
+		self.info.pack(side=tkinter.RIGHT)
+
+
+		
     
 	def set(self, text):
 		self.label.config(text=text)
 
 	def settime(self,t):
-		self.timelabel.config(text=str(t))
+		self.timelabel.config(text="Time:"+str(t))
+
+	def setinfo(self,info):
+		self.info.config(text=info)
+
     
 	def clear(self):
 		self.label.config(text='')
