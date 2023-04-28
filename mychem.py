@@ -190,6 +190,9 @@ class Space:
 		self.root= tkinter.Tk()
 		self.gravity = tkinter.BooleanVar()
 		self.competitive = tkinter.BooleanVar()
+		self.competitive.set(True)
+		self.bondlock = tkinter.BooleanVar()
+		self.bondlock.set(False)
 		self.adding_mode = False
 		self.moving_mode = False
 		self.changed = False
@@ -199,7 +202,6 @@ class Space:
 		self.recentdata = None
 		self.resetdata = None
 		self.merge_atoms = []
-		self.competitive.set(True)
 		self.root.title("Mychem")
 		self.root.resizable(0, 0)
 		self.menu_bar = tkinter.Menu(self.root)
@@ -215,6 +217,7 @@ class Space:
 		sim_menu.add_command(label="Reset", accelerator="r",command=self.reset)
 		sim_menu.add_checkbutton(label="Gravity", accelerator="g", variable=self.gravity,command=self.handle_g)
 		sim_menu.add_checkbutton(label="Competitive", accelerator="c", variable=self.competitive,command=self.handle_c)
+		sim_menu.add_checkbutton(label="Bond lock", accelerator="b", variable=self.bondlock,command=self.handle_bondlock)
 		add_menu = tkinter.Menu(self.menu_bar, tearoff=False)
 		add_menu.add_command(label="H", accelerator="1",command=lambda:self.handle_keypress(keysym="1"))
 		add_menu.add_command(label="O", accelerator="2",command=lambda:self.handle_keypress(keysym="2"))
@@ -242,6 +245,7 @@ class Space:
 		self.root.bind("<l>", self.file_merge_recent)
 		self.root.bind("<o>", self.file_open)
 		self.root.bind("<s>", self.file_save)
+		self.root.bind("<b>", self.handle_bondlock)
 		self.root.bind("<Button-1>",self.handle_button1)
 		self.root.bind("<Button-3>",self.handle_esc)
 		self.root.bind("<KeyPress>", self.handle_keypress2)
@@ -312,6 +316,7 @@ class Space:
 			self.newatom = None
 			self.adding_mode=False
 			self.update_canvas()
+	
 	def handle_del(self,event=None):
 		if self.moving_mode:
 			self.atoms.remove(self.newatom)
@@ -350,7 +355,7 @@ class Space:
 					q = 1
 
 				elif self.createtype==100:
-					m=40
+					m=100
 					r=10
 					q = 1
 
@@ -377,6 +382,11 @@ class Space:
 		self.gravity.set(not self.gravity.get())
 		self.status_bar.set("Gravity is "+ OnOff(self.gravity.get()))
 
+	def handle_bondlock(self,event=None):
+		self.bondlock.set(not self.bondlock.get())
+		self.status_bar.set("Bondlock is "+ OnOff(self.bondlock.get()))
+
+
 	def handle_c(self,event):
 		self.competitive.set(not self.competitive.get())
 		self.status_bar.set("Competitive is "+ OnOff(self.competitive.get()))
@@ -389,6 +399,7 @@ class Space:
 			if self.newatom.type==100:
 				self.activemixer = True
 				self.mixers.append(self.newatom)
+				self.status_bar.set("New mixer!")
 			self.make_newatom()
 			self.update_canvas()
 		if not(self.moving_mode or self.adding_mode or self.merge_mode):
@@ -427,10 +438,7 @@ class Space:
 			if self.pause:
 				self.update_canvas()
 		if self.merge_mode:
-			x = self.root.winfo_pointerx() - self.canvas.winfo_rootx()
-			y = self.root.winfo_pointery() - self.canvas.winfo_rooty()
-			cx = self.canvas.canvasx(x)
-			cy = self.canvas.canvasy(y)
+			(cx,cy) = self.getpointer()
 			for a in self.merge_atoms:
 				a.x = a.x - self.merge_offsetx + cx
 				a.y = a.y - self.merge_offsety + cy
@@ -474,6 +482,11 @@ class Space:
 			aa.m=a["m"]
 			if merge:
 				aa.space = self
+				(self.merge_offsetx, self.merge_offsety) =  (self.WIDTH/2,self.HEIGHT/2)
+				(cx,cy) = self.getpointer()
+				aa.x = aa.x - self.merge_offsetx + cx
+				aa.y = aa.y - self.merge_offsety + cy
+				(self.merge_offsetx, self.merge_offsety) = (cx,cy)
 				self.merge_atoms.append(aa)
 			else:
 				self.appendatom(aa)
@@ -499,28 +512,22 @@ class Space:
 			return
 		f =  open(fileName,"r")		
 		self.merge_atoms = []
-		self.merge_offsetx = self.WIDTH/2
-		self.merge_offsety = self.HEIGHT/2
 		mergedata = json.loads(f.read())
 		self.recentdata = mergedata
-		self.load_data(mergedata, merge=True)
 		self.merge_mode=True
+		self.load_data(mergedata, merge=True)
 		self.canvas.configure(cursor="hand2")
 		self.status_bar.set("Merging mode")
-		#self.update_canvas()
 
 	def file_merge_recent(self,event=None):
 		if not self.recentdata:
 			return
 		self.sim_pause()
 		self.merge_atoms = []
-		self.merge_offsetx = self.WIDTH/2
-		self.merge_offsety = self.HEIGHT/2
-		self.load_data(self.recentdata, merge=True)
 		self.merge_mode=True
+		self.load_data(self.recentdata, merge=True)
 		self.canvas.configure(cursor="hand2")
 		self.status_bar.set("Merging mode")
-		#self.update_canvas()
 
 	def file_exit(self):
 		self.root.destroy()
@@ -547,6 +554,7 @@ class Space:
 		if self.merge_mode:
 			for a in self.merge_atoms:
 				a.draw(self.canvas)
+		self.canvas.update()
 
 
 
@@ -591,7 +599,7 @@ class Space:
 		frame = {}
 		frame["time"] = self.t
 		frame["atoms"] = []
-		frame["mixers"] = []
+		#frame["mixers"] = []
 		N = len(self.atoms)
 		for i in range(0,N):
 			atom = {}
@@ -658,8 +666,7 @@ class Space:
 					r2 = delta_x*delta_x+ delta_y*delta_y
 					r = sqrt(r2)
 					SUMRADIUS = atom_i.r+atom_j.r
-					AVGRADIUS = SUMRADIUS/2
-					#if r>self.ATOMRADIUS*5:continue
+					#AVGRADIUS = SUMRADIUS/2
 					if r2 == 0:
 						continue;
 
@@ -674,7 +681,7 @@ class Space:
 					Ey = Ey + delta_y/r *a
 					allnEx = 0
 					allnEy = 0
-					nvf = 0
+					naf = 0
 
 					Q = atom_i.q*atom_j.q
 					for n1 in atom_i.nodes:
@@ -683,32 +690,29 @@ class Space:
 
 						nEx = 0
 						nEy = 0
-						nvf = 0
+						naf = 0
 						for n2 in atom_j.nodes:
 							n2x = atom_j.x + cos(n2.f+atom_j.f)*atom_j.r
 							n2y = atom_j.y - sin(n2.f+atom_j.f)*atom_j.r
 							delta_x = n1x-n2x
 							delta_y = n1y-n2y
-							#delta_f = (n1.f-atom_i.f) - (n2.f-atom_j.f) 
-							r2 = delta_x*delta_x + delta_y*delta_y
-							rn = sqrt(r2) 
+							r2n = delta_x*delta_x + delta_y*delta_y
+							rn = sqrt(r2n) 
 							if rn==0: continue
 							a = 0
 							if rn<self.BONDR and not n1.bonded and not n2.bonded:
 								n1.bond(n2)
-								#print('bond '+str(i)+' '+str(j))
 							if rn>self.BONDR and n1.pair == n2:
-								n1.unbond()
-								#print('unbond '+str(i)+' '+str(j))
+								if not self.bondlock.get():
+									n1.unbond()
 							if n1.pair == n2:
 								if (rn>0): 
-									a = -r2*self.BOND_KOEFF
-									nvf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+atom_i.f)*atom_i.r * delta_y + delta_x*sin(n1.f+atom_i.f)*atom_i.r)
+									a = -r2n*self.BOND_KOEFF
+									naf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+atom_i.f)*atom_i.r * delta_y + delta_x*sin(n1.f+atom_i.f)*atom_i.r)
 							#if not n1.bonded and not n2.bonded and rn<self.ATTRACTatom_i.qR and r>self.ATOMRADIUS	:
 							elif self.competitive.get():
-								#a = -0.0005
 								a = 1/rn*self.ATTRACT_KOEFF*Q
-								nvf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+atom_i.f)*atom_i.r * delta_y + delta_x*sin(n1.f+atom_i.f)*atom_i.r)
+								naf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+atom_i.f)*atom_i.r * delta_y + delta_x*sin(n1.f+atom_i.f)*atom_i.r)
 
 
 							nEx = nEx + delta_x/rn * a
@@ -716,7 +720,7 @@ class Space:
 
 						allnEx = allnEx + nEx
 						allnEy = allnEy + nEy
-						atom_i.vf = atom_i.vf + nvf
+						atom_i.vf = atom_i.vf + naf
 
 					Ex+= allnEx
 					Ey+= allnEy
@@ -727,14 +731,16 @@ class Space:
 
 			if self.activemixer:
 				for m in self.mixers:
-					if m.vx>=0:
-						m.vx =1
-					if m.vx<0:	
-						m.vx = -1
-					if m.vy>=0:
-						m.vy =1
-					if m.vy<0:
-						m.vy = -1
+						m.vx*=1.1
+						m.vy*=1.1
+#					if m.vx>=0:
+#						m.vx =1
+#					if m.vx<0:	
+#						m.vx = -1
+#					if m.vy>=0:
+#						m.vy =1
+#					if m.vy<0:
+#						m.vy = -1
 
 			if self.action:
 				self.action(self)
@@ -758,7 +764,7 @@ class Space:
 			#	if(time%1 ==0):  
 			#		for i in range(0,N):	
 
-			self.canvas.update()
+
 			if self.recording:
 					save_widget_as_image(self.canvas,'output/'+str(self.t)+'.png')
 			if self.export:
