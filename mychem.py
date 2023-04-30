@@ -354,23 +354,23 @@ class Space:
 				if self.createtype==1:
 					r = 6
 					m = 1
-					q = 1
+					q = 0
 				elif self.createtype==2:
 					r = 8
 					m = 16
-					q = -1
+					q = 0
 				elif self.createtype==3:
 					r = 9
 					m = 14
-					q = -1
+					q = 0
 				elif self.createtype==4:
 					m = 12
 					r = 10
-					q = -1
+					q = 0
 				elif self.createtype==5:
 					m = 10
 					r = 10
-					q = 1
+					q = 0
 
 				elif self.createtype==100:
 					m=100
