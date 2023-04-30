@@ -38,11 +38,12 @@ def getpointer(self):
 
 
 class Node:
-	def __init__(self):
+	def __init__(self,parent):
 		self.f = 0
 		self.bonded = False
 		self.pair = None
 		self.canvas_id = None
+		self.parent = parent
 		pass
 	def bond(self,n):
 		n.pair = self
@@ -97,15 +98,27 @@ class Atom:
 
 		if self.type<5:
 			for i in range(0,self.type):
-				n = Node()
+				n = Node(self)
 				n.f = 2*PI/self.type*i
 				self.nodes.append(n)
 		elif self.type==5:
-			(n1,n2,n3) = (Node(),Node(),Node())
+			(n1,n2,n3) = (Node(self),Node(self),Node(self))
 			n1.f = 0
 			n2.f = PI/2
 			n3.f = PI
 			self.nodes.extend([n1,n2,n3])
+
+	def calculate_q(self):
+		bc = 0
+		q = 0
+		for n in self.nodes:
+			if n.bonded:
+				if self.type > n.pair.parent.type:
+					q +=1
+				if self.type < n.pair.parent.type:
+					q -=1
+		return q
+			
 	def unbond(self):
 		for n in self.nodes:
 			n.unbond()
@@ -165,7 +178,7 @@ class Space:
 		self.ATOMRADIUS = 10
 		self.BOND_KOEFF = 0.2
 		self.BONDR = 4
-		self.ATTRACT_KOEFF= 0.01
+		self.ATTRACT_KOEFF= 0.25
 		self.ATTRACTR = 5*self.ATOMRADIUS
 		self.ROTA_KOEFF = 0.00005
 		self.DETRACT1 = -3
@@ -176,7 +189,6 @@ class Space:
 		self.atoms = []	
 		self.mixers = []
 		self.action = None
-		self.activemixer = False
 		self.recording = False
 		self.export = False
 		self.export_file = "mychem.json"
@@ -202,6 +214,7 @@ class Space:
 		self.recentdata = None
 		self.resetdata = None
 		self.merge_atoms = []
+		self.merge_mixers = []
 		self.root.title("Mychem")
 		self.root.resizable(0, 0)
 		self.menu_bar = tkinter.Menu(self.root)
@@ -316,6 +329,11 @@ class Space:
 			self.newatom = None
 			self.adding_mode=False
 			self.update_canvas()
+		if self.merge_mode:
+			self.merge_atoms = []
+			self.merge_mode = False
+			self.canvas.configure(cursor="tcross")
+			self.update_canvas()
 	
 	def handle_del(self,event=None):
 		if self.moving_mode:
@@ -397,7 +415,6 @@ class Space:
 			self.appendatom(self.newatom)
 			self.createf = self.newatom.f
 			if self.newatom.type==100:
-				self.activemixer = True
 				self.mixers.append(self.newatom)
 				self.status_bar.set("New mixer!")
 			self.make_newatom()
@@ -425,9 +442,12 @@ class Space:
 		elif self.merge_mode:
 			self.merge_mode=False
 			self.atoms.extend(self.merge_atoms)
+			self.mixers.extend(self.merge_mixers)
 			self.merge_atoms = []
+			self.merge_mixers = []
 			self.canvas.configure(cursor="tcross")
 			self.update_canvas()
+			self.resetdata = self.make_export()
 			self.status_bar.set("Merge finished")
 	
 	def handle_motion(self,event=None):
@@ -454,6 +474,23 @@ class Space:
 			else:
 				self.newatom.f -= PI/18
 			self.status_bar.set(str(event.delta))
+			self.update_canvas()
+		if self.merge_mode:
+			f=0
+			if event.delta>0:
+				f += PI/18
+			else:
+				f -= PI/18
+			for a in self.merge_atoms:
+				(cx,cy) = self.getpointer()
+				#a.x = a.x - self.merge_offsetx
+				#a.y = a.y - self.merge_offsety
+				a.x -=cx
+				a.y -=cy
+				(a.x, a.y) = ( a.x*cos(f) - a.y*sin(f) , a.x*sin(f) + a.y*cos(f))
+				a.x += cx
+				a.y += cy
+				a.f -= f
 			self.update_canvas()
 
 
@@ -488,10 +525,12 @@ class Space:
 				aa.y = aa.y - self.merge_offsety + cy
 				(self.merge_offsetx, self.merge_offsety) = (cx,cy)
 				self.merge_atoms.append(aa)
+				if type == 100:
+					self.merge_mixers.append(aa)
 			else:
 				self.appendatom(aa)
-			if type == 100:
-				self.mixers.append(aa)
+				if type == 100:
+					self.mixers.append(aa)
 		self.update_canvas()
 
 
@@ -592,7 +631,6 @@ class Space:
 			m.vy = 1
 			m.m = 40
 			self.mixers.append(m)
-			self.activemixer = True
 			self.atoms.append(m)
 	
 	def make_export(self):
@@ -626,7 +664,7 @@ class Space:
 	def go(self):	
 		self.root.after(1,self.mainloop)
 		self.root.mainloop()
-
+	
 	def mainloop(self):
 			K = 1
 			if self.pause:
@@ -677,13 +715,17 @@ class Space:
 					if r<SUMRADIUS+self.DETRACT2:
 						a = 1/r*self.DETRACT_KOEFF2
 
+					if self.competitive.get() and not atom_i.type==100:
+						Q = atom_i.q*atom_j.q
+						a+= Q/r*self.ATTRACT_KOEFF
+
 					Ex = Ex + delta_x/r *a
 					Ey = Ey + delta_y/r *a
 					allnEx = 0
 					allnEy = 0
 					naf = 0
 
-					Q = atom_i.q*atom_j.q
+
 					for n1 in atom_i.nodes:
 						n1x = atom_i.x + cos(n1.f+atom_i.f)*atom_i.r
 						n1y = atom_i.y - sin(n1.f+atom_i.f)*atom_i.r
@@ -702,17 +744,21 @@ class Space:
 							a = 0
 							if rn<self.BONDR and not n1.bonded and not n2.bonded:
 								n1.bond(n2)
+#								self.calculate_q(atom_i)	
+#								self.calculate_q(atom_j)
 							if rn>self.BONDR and n1.pair == n2:
 								if not self.bondlock.get():
 									n1.unbond()
+#									self.calculate_q(atom_i)	
+#									self.calculate_q(atom_j)
 							if n1.pair == n2:
 								if (rn>0): 
 									a = -r2n*self.BOND_KOEFF
 									naf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+atom_i.f)*atom_i.r * delta_y + delta_x*sin(n1.f+atom_i.f)*atom_i.r)
 							#if not n1.bonded and not n2.bonded and rn<self.ATTRACTatom_i.qR and r>self.ATOMRADIUS	:
-							elif self.competitive.get():
-								a = 1/rn*self.ATTRACT_KOEFF*Q
-								naf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+atom_i.f)*atom_i.r * delta_y + delta_x*sin(n1.f+atom_i.f)*atom_i.r)
+							#if self.competitive.get():
+							#	a += 1/rn*self.ATTRACT_KOEFF*Q
+							#	naf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+atom_i.f)*atom_i.r * delta_y + delta_x*sin(n1.f+atom_i.f)*atom_i.r)
 
 
 							nEx = nEx + delta_x/rn * a
@@ -729,18 +775,18 @@ class Space:
 				if self.gravity.get():
 					atom_i.ay +=self.g
 
-			if self.activemixer:
+			if len(self.mixers)>0:
 				for m in self.mixers:
-						m.vx*=1.1
-						m.vy*=1.1
-#					if m.vx>=0:
-#						m.vx =1
-#					if m.vx<0:	
-#						m.vx = -1
-#					if m.vy>=0:
-#						m.vy =1
-#					if m.vy<0:
-#						m.vy = -1
+#						m.vx*=1.1
+#						m.vy*=1.1
+					if m.vx>=0:
+						m.vx =1
+					if m.vx<0:	
+						m.vx = -1
+					if m.vy>=0:
+						m.vy =1
+					if m.vy<0:
+						m.vy = -1
 
 			if self.action:
 				self.action(self)
@@ -756,6 +802,7 @@ class Space:
 				atom_i.vx *= 0.9999
 				atom_i.vy *= 0.9999
 				atom_i.vf *= 0.99
+				atom_i.calculate_q()
 				atom_i.next()
 			
 			self.update_canvas()
