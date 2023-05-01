@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from cgitb import handler
+#from cgitb import handler
 from time import sleep
 #from tkinter import *
 import tkinter
@@ -93,15 +93,24 @@ class Atom:
 			self.color = "yellow"
 		if self.type==5:
 			self.color = "brown"
+		if self.type==6:
+			self.color = "#83ce89"
+		if self.type==10:
+			self.color = "green"
 		if self.type==100:
 			self.color = "magenta"
 
-		if self.type<5:
+		if self.type<6:
 			for i in range(0,self.type):
 				n = Node(self)
 				n.f = 2*PI/self.type*i
 				self.nodes.append(n)
-		elif self.type==5:
+		elif self.type==6:
+			(n1,n2) = (Node(self),Node(self))				
+			n1.f = 0
+			n2.f = PI
+			self.nodes.extend([n1,n2])
+		elif self.type==10:
 			(n1,n2,n3) = (Node(self),Node(self),Node(self))
 			n1.f = 0
 			n2.f = PI/2
@@ -109,7 +118,6 @@ class Atom:
 			self.nodes.extend([n1,n2,n3])
 
 	def calculate_q(self):
-		bc = 0
 		q = 0
 		for n in self.nodes:
 			if n.bonded:
@@ -305,11 +313,8 @@ class Space:
 		if keysym=='5':
 			self.createtype=5
 			self.adding_mode = True
-		if keysym=='5':
-			self.createtype=5
-			self.adding_mode = True
-		if keysym=='5':
-			self.createtype=5
+		if keysym=='6':
+			self.createtype=6
 			self.adding_mode = True
 		if keysym=='0':
 			self.createtype=100
@@ -368,9 +373,14 @@ class Space:
 					r = 10
 					q = 0
 				elif self.createtype==5:
-					m = 10
-					r = 10
+					m = 31
+					r = 12
 					q = 0
+				elif self.createtype==6:
+					m = 32
+					r = 12
+					q = 0
+
 
 				elif self.createtype==100:
 					m=100
