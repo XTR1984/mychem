@@ -29,13 +29,6 @@ def OnOff(b):
 	if b: return "On"
 	else: return "Off"
 
-def getpointer(self):
-				x = self.root.winfo_pointerx() - self.canvas.winfo_rootx()
-				y = self.root.winfo_pointery() - self.canvas.winfo_rooty()
-				cx = self.canvas.canvasx(x)
-				cy = self.canvas.canvasy(y)
-				return (cx,cy)
-
 
 class Node:
 	def __init__(self,parent):
@@ -244,7 +237,8 @@ class Space:
 		add_menu.add_command(label="O", accelerator="2",command=lambda:self.handle_keypress(keysym="2"))
 		add_menu.add_command(label="N", accelerator="3",command=lambda:self.handle_keypress(keysym="3"))
 		add_menu.add_command(label="C", accelerator="4",command=lambda:self.handle_keypress(keysym="4"))
-		add_menu.add_command(label="X", accelerator="5",command=lambda:self.handle_keypress(keysym="5"))
+		add_menu.add_command(label="P", accelerator="5",command=lambda:self.handle_keypress(keysym="5"))
+		add_menu.add_command(label="S", accelerator="6",command=lambda:self.handle_keypress(keysym="6"))
 		add_menu.add_command(label="Mixer", accelerator="0",command=lambda:self.handle_keypress(keysym="0"))
 		add_menu.add_command(label="Delete", accelerator="Delete",command=self.handle_del)
 		add_menu.add_command(label="Cancel", accelerator="Esc",command=self.handle_esc)
