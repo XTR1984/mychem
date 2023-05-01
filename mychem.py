@@ -375,7 +375,7 @@ class Space:
 				elif self.createtype==100:
 					m=100
 					r=10
-					q = 1
+					q = 0
 
 				self.newatom = Atom(cx,cy,self.createtype,f=self.createf,m=m,q=q,r=r)
 
@@ -424,7 +424,7 @@ class Space:
 			for a in self.atoms:
 				bbox = self.canvas.bbox(a.canvas_id)
 				if bbox[0] <= x <= bbox[2] and bbox[1] <= y <= bbox[3]:
-					#a.unbond()
+					a.unbond()
 					#remove from nears
 					#for i in range(0,len(self.atoms)):
 #						for j in range(0,len(self.atom[i].near)):
@@ -662,6 +662,7 @@ class Space:
 		#			j = 
 	
 	def go(self):	
+		self.resetdata = self.make_export()
 		self.root.after(1,self.mainloop)
 		self.root.mainloop()
 	
