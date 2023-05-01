@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 #from cgitb import handler
 from time import sleep
-#from tkinter import *
-import tkinter
+#from tk import *
+import tkinter as tk
 import tkinter.filedialog
 from math import *
 import random
@@ -200,11 +200,11 @@ class Space:
 		self.createtype=4
 		self.createf = 0
 		self.standard = True
-		self.root= tkinter.Tk()
-		self.gravity = tkinter.BooleanVar()
-		self.competitive = tkinter.BooleanVar()
+		self.root= tk.Tk()
+		self.gravity = tk.BooleanVar()
+		self.competitive = tk.BooleanVar()
 		self.competitive.set(True)
-		self.bondlock = tkinter.BooleanVar()
+		self.bondlock = tk.BooleanVar()
 		self.bondlock.set(False)
 		self.adding_mode = False
 		self.moving_mode = False
@@ -218,21 +218,21 @@ class Space:
 		self.merge_mixers = []
 		self.root.title("Mychem")
 		self.root.resizable(0, 0)
-		self.menu_bar = tkinter.Menu(self.root)
-		file_menu = tkinter.Menu(self.menu_bar, tearoff=False)
+		self.menu_bar = tk.Menu(self.root)
+		file_menu = tk.Menu(self.menu_bar, tearoff=False)
 		file_menu.add_command(label="New", accelerator="n", command=self.file_new)
 		file_menu.add_command(label="Open", accelerator="o", command=self.file_open)
 		file_menu.add_command(label="Merge", accelerator="m", command=self.file_merge)
 		file_menu.add_command(label="Merge recent", accelerator="l", command=self.file_merge_recent)
 		file_menu.add_command(label="Save", accelerator="s", command=self.file_save)
 		file_menu.add_command(label="Exit", command=self.file_exit)
-		sim_menu = tkinter.Menu(self.menu_bar, tearoff=False)
+		sim_menu = tk.Menu(self.menu_bar, tearoff=False)
 		sim_menu.add_command(label="Go/Pause", accelerator="Space",command=self.handle_space)
 		sim_menu.add_command(label="Reset", accelerator="r",command=self.reset)
 		sim_menu.add_checkbutton(label="Gravity", accelerator="g", variable=self.gravity,command=self.handle_g)
 		sim_menu.add_checkbutton(label="Competitive", accelerator="c", variable=self.competitive,command=self.handle_c)
 		sim_menu.add_checkbutton(label="Bond lock", accelerator="b", variable=self.bondlock,command=self.handle_bondlock)
-		add_menu = tkinter.Menu(self.menu_bar, tearoff=False)
+		add_menu = tk.Menu(self.menu_bar, tearoff=False)
 		add_menu.add_command(label="H", accelerator="1",command=lambda:self.handle_keypress(keysym="1"))
 		add_menu.add_command(label="O", accelerator="2",command=lambda:self.handle_keypress(keysym="2"))
 		add_menu.add_command(label="N", accelerator="3",command=lambda:self.handle_keypress(keysym="3"))
@@ -242,11 +242,15 @@ class Space:
 		add_menu.add_command(label="Mixer", accelerator="0",command=lambda:self.handle_keypress(keysym="0"))
 		add_menu.add_command(label="Delete", accelerator="Delete",command=self.handle_del)
 		add_menu.add_command(label="Cancel", accelerator="Esc",command=self.handle_esc)
-		
+		examples_menu = tk.Menu(self.menu_bar, tearoff=False)
+		self.create_json_menu(examples_menu,"examples/")
+
 
 		self.menu_bar.add_cascade(label="File", menu=file_menu)
 		self.menu_bar.add_cascade(label="Simulation", menu=sim_menu)
 		self.menu_bar.add_cascade(label="Add", menu=add_menu)
+		self.menu_bar.add_cascade(label="Examples", menu=examples_menu)
+
 
 		self.root.config(menu=self.menu_bar)
 		
@@ -266,17 +270,30 @@ class Space:
 		self.root.bind("<KeyPress>", self.handle_keypress2)
 		self.root.bind("<Motion>", self.handle_motion)
 		self.root.bind("<MouseWheel>",self.handle_wheel)
-		self.frame = tkinter.Frame(self.root, bd=5, relief=tkinter.SUNKEN)
+		self.frame = tk.Frame(self.root, bd=5, relief=tk.SUNKEN)
 		self.frame.pack()
-		self.canvas = tkinter.Canvas(self.frame, width=self.WIDTH, height=self.HEIGHT, bd=0, highlightthickness=0,background="black")
+		self.canvas = tk.Canvas(self.frame, width=self.WIDTH, height=self.HEIGHT, bd=0, highlightthickness=0,background="black")
 		self.canvas.configure(cursor="tcross")
 		self.canvas.pack()
 		self.status_bar = StatusBar(self.root)
-		self.status_bar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
+		self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 		self.status_bar.set('Ready')
 		#self.canvas.update()
 		if not os.path.exists('output'):
 			os.makedirs('output')
+
+	def create_json_menu(self,menu, lpath):
+		files_last = []
+		for filename in os.listdir(lpath):
+			filepath = os.path.join(lpath, filename)
+			if os.path.isdir(filepath):
+				submenu = tk.Menu(menu,tearoff=False)
+				menu.add_cascade(label=filename, menu=submenu)
+				self.create_json_menu(submenu, filepath)
+			elif os.path.splitext(filename)[-1] == ".json":
+				files_last.append((filename,filepath))
+		for (f,p) in files_last:				
+			menu.add_command(label=f, command=lambda p2=p: self.file_merge(path=p2))
 
 	def getpointer(self):
 				x = self.root.winfo_pointerx() - self.canvas.winfo_rootx()
@@ -548,11 +565,15 @@ class Space:
 		self.load_data(self.resetdata)
 		self.status_bar.set("File loaded")
 
-	def file_merge(self,event=None):
+	def file_merge(self,event=None, path=None):
 		self.sim_pause()
-		fileName = tkinter.filedialog.askopenfilename(title="Select file", filetypes=(("JSON files", "*.json"), ("All Files", "*.*")))
-		if not fileName:	
-			return
+		if path:
+			print(path)
+			fileName=path
+		else:
+			fileName = tkinter.filedialog.askopenfilename(title="Select file", filetypes=(("JSON files", "*.json"), ("All Files", "*.*")))
+			if not fileName:	
+				return
 		f =  open(fileName,"r")		
 		self.merge_atoms = []
 		mergedata = json.loads(f.read())
@@ -834,17 +855,17 @@ class Space:
 			self.root.after(1,self.mainloop)
   
 
-class StatusBar(tkinter.Frame):
+class StatusBar(tk.Frame):
 	def __init__(self, master):
 		super().__init__(master)
-		status_frame = tkinter.Frame(master, bd=1, relief=tkinter.SUNKEN)
-		status_frame.pack(side=tkinter.BOTTOM, fill=tkinter.X)
-		self.label = tkinter.Label(status_frame, text= "Status")
-		self.label.pack(side=tkinter.LEFT)
-		self.timelabel = tkinter.Label(status_frame, text="Time")
-		self.timelabel.pack(side=tkinter.RIGHT)
-		self.info = tkinter.Label(status_frame, text="Info")
-		self.info.pack(side=tkinter.RIGHT)
+		status_frame = tk.Frame(master, bd=1, relief=tk.SUNKEN)
+		status_frame.pack(side=tk.BOTTOM, fill=tk.X)
+		self.label = tk.Label(status_frame, text= "Status")
+		self.label.pack(side=tk.LEFT)
+		self.timelabel = tk.Label(status_frame, text="Time")
+		self.timelabel.pack(side=tk.RIGHT)
+		self.info = tk.Label(status_frame, text="Info")
+		self.info.pack(side=tk.RIGHT)
 
 
 		
