@@ -203,12 +203,6 @@ class Space:
 		self.createtype=4
 		self.createf = 0
 		self.standard = True
-		self.root= tk.Tk()
-		self.gravity = tk.BooleanVar()
-		self.competitive = tk.BooleanVar()
-		self.competitive.set(True)
-		self.bondlock = tk.BooleanVar()
-		self.bondlock.set(False)
 		self.adding_mode = False
 		self.moving_mode = False
 		self.changed = False
@@ -219,6 +213,14 @@ class Space:
 		self.resetdata = None
 		self.merge_atoms = []
 		self.merge_mixers = []
+		######## tkinter ########
+		self.root= tk.Tk()
+		self.gravity = tk.BooleanVar()
+		self.competitive = tk.BooleanVar()
+		self.competitive.set(True)
+		self.bondlock = tk.BooleanVar()
+		self.update_delta= tk.IntVar(value=5)
+		self.bondlock.set(False)
 		self.root.title("Mychem")
 		self.root.resizable(0, 0)
 		self.menu_bar = tk.Menu(self.root)
@@ -245,18 +247,18 @@ class Space:
 		add_menu.add_command(label="Mixer", accelerator="0",command=lambda:self.handle_keypress(keysym="0"))
 		add_menu.add_command(label="Delete", accelerator="Delete",command=self.handle_del)
 		add_menu.add_command(label="Cancel", accelerator="Esc",command=self.handle_esc)
+		#options_menu = tk.Menu(self.menu_bar, tearoff=False)
 		examples_menu = tk.Menu(self.menu_bar, tearoff=False)
 		self.create_json_menu(examples_menu,"examples/")
-
-
+		
 		self.menu_bar.add_cascade(label="File", menu=file_menu)
 		self.menu_bar.add_cascade(label="Simulation", menu=sim_menu)
 		self.menu_bar.add_cascade(label="Add", menu=add_menu)
+		self.menu_bar.add_command(label="Options", command=self.options_window)
 		self.menu_bar.add_cascade(label="Examples", menu=examples_menu)
-
+		#self.menu_bar.add_command(label="About", command=self.about_window)
 
 		self.root.config(menu=self.menu_bar)
-		
 		self.root.bind("<space>", self.handle_space)
 		self.root.bind("<Escape>", self.handle_esc)
 		self.root.bind("<Delete>", self.handle_del)
@@ -297,6 +299,21 @@ class Space:
 				files_last.append((filename,filepath))
 		for (f,p) in files_last:				
 			menu.add_command(label=f, command=lambda p2=p: self.file_merge(path=p2))
+	
+
+	def options_window(self):
+		o = OptionsFrame(self)
+		
+	def about_window(self):
+		
+		a = tk.Toplevel()
+		a.geometry('200x150')
+		a['bg'] = 'grey'
+		a.overrideredirect(True)
+		tk.Label(a, text="About this")\
+        	.pack(expand=1)
+		a.after(5000, lambda: a.destroy())
+
 
 	def getpointer(self):
 				x = self.root.winfo_pointerx() - self.canvas.winfo_rootx()
@@ -753,7 +770,6 @@ class Space:
 			atom_i.f=self.np_f[i]
 
 	def np_limits(self): 
-		
 		self.np_vx[self.np_vx< -self.MAXVELOCITY] = -self.MAXVELOCITY
 		self.np_vx[self.np_vx> self.MAXVELOCITY] = self.MAXVELOCITY
 		self.np_vy[self.np_vy< -self.MAXVELOCITY] = -self.MAXVELOCITY
@@ -761,24 +777,25 @@ class Space:
 		self.np_f[self.np_f> 2*PI] -=2*PI
 		self.np_f[self.np_f< 0] += 2*PI
 
+		b = self.np_x< self.np_r
+		self.np_x[b] = self.np_r[b]
+		self.np_vx[b] = - self.np_vx[b]
 
-#		if self.x < self.r: 
-#			self.vx= -self.vx
-#			self.x = self.r
-#		if self.x>self.space.WIDTH-self.r : 
-#			self.vx= -self.vx
-#			self.x = self.space.WIDTH-self.r
-#		if self.y < self.r:
-#			self.vy= -self.vy
-#			self.y = self.r
-#		if self.y>self.space.HEIGHT-self.r : 
-#			self.vy= -self.vy
-#			self.y= self.space.HEIGHT-self.r
+		b = self.np_y < self.np_r
+		self.np_y[b] = self.np_r[b]
+		self.np_vy[b] = - self.np_vy[b]
 		
+		b = self.np_x > self.WIDTH-self.np_r
+		self.np_x[b] = (self.WIDTH-self.np_r)[b]
+		self.np_vx[b] = - self.np_vx[b]
+
+		b = self.np_y > self.HEIGHT-self.np_r
+		self.np_y[b] = (self.HEIGHT-self.np_r)[b]
+		self.np_vy[b] = - self.np_vy[b]
 
 	def go(self):	
 		self.timer = 1
-		self.stoptime = 1000
+		#self.stoptime = 1000
 		self.resetdata = self.make_export()
 		self.atoms2numpy()
 		self.root.after(self.timer,self.mainloop)
@@ -937,7 +954,8 @@ class Space:
 			self.np_f += self.np_vf
 			self.np_limits()
 			#self.numpy2atoms()
-			self.update_canvas()
+			if (self.t%self.update_delta.get()==0):
+				self.update_canvas()
 			
 			#  canvas.after(1)
 			#	if(time%1 ==0):  
@@ -960,11 +978,10 @@ class Space:
 				self.status_bar.setinfo("Number of atoms: "+str(N))
 			self.root.after(self.timer,self.mainloop)
   
-
 class StatusBar(tk.Frame):
-	def __init__(self, master):
-		super().__init__(master)
-		status_frame = tk.Frame(master, bd=1, relief=tk.SUNKEN)
+	def __init__(self, parent):
+		super().__init__(parent)
+		status_frame = tk.Frame(parent, bd=1, relief=tk.SUNKEN)
 		status_frame.pack(side=tk.BOTTOM, fill=tk.X)
 		self.label = tk.Label(status_frame, text= "Status")
 		self.label.pack(side=tk.LEFT)
@@ -973,8 +990,6 @@ class StatusBar(tk.Frame):
 		self.info = tk.Label(status_frame, text="Info")
 		self.info.pack(side=tk.RIGHT)
 
-
-		
     
 	def set(self, text):
 		self.label.config(text=text)
@@ -984,10 +999,27 @@ class StatusBar(tk.Frame):
 
 	def setinfo(self,info):
 		self.info.config(text=info)
-
     
 	def clear(self):
 		self.label.config(text='')
+
+class OptionsFrame():
+	def __init__(self,space):
+		self.space = space
+		a = tk.Toplevel()
+		a.title("Options")
+		a.resizable(0, 0)
+		#a.geometry('200x150')
+		self.frame = tk.Frame(a, bd=5, relief=tk.SUNKEN)
+		self.frame.pack()
+		self.label = tk.Label(self.frame, text= "Update delta")
+		self.label.pack(side=tk.LEFT)
+		self.update_slider = tk.Scale(self.frame, from_=1, to=100, orient=tk.HORIZONTAL,variable=self.space.update_delta).pack()
+		self.update_slider.pack()
+#	def set_update_delta(self,value):
+#		self.space.update_delta=value
+
+
 
 if __name__ == "__main__":
 	random.seed(1)
