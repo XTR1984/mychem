@@ -38,12 +38,24 @@ class Node:
 		self.pair = None
 		self.canvas_id = None
 		self.parent = parent
-		pass
+		self.q = 0
+	def shift_q(self,type1,type2):
+		table=[5,1,4,6,3,2]
+		i1 = table.index(type1)
+		i2 = table.index(type2)
+		if i1<i2:
+			return (1,-1)
+		if i1>i2:
+			return (-1,1)
+		return (0,0)
+
 	def bond(self,n):
 		n.pair = self
 		n.bonded = True
 		self.pair = n
 		self.bonded = True
+		(s1,s2) = self.shift_q(self.parent.type, n.parent.type)
+		(self.q,n.q) = (s1,s2)
 
 	def unbond(self):
 		if self.bonded:
@@ -114,16 +126,17 @@ class Atom:
 	def calculate_q(self):
 		q = 0
 		for n in self.nodes:
-			if n.bonded:
-				if self.type > n.pair.parent.type:
-					q +=1
-				if self.type < n.pair.parent.type:
-					q -=1
+			q+=n.q
 		return q
 			
 	def unbond(self):
 		for n in self.nodes:
-			n.unbond()
+			if n.bonded:
+				p = n.pair.parent
+				n.unbond()
+				p.calculate_q()
+		self.calculate_q()
+
 	def draw(self,canvas):
 		self.canvas_id = canvas.create_oval(self.x-self.r,self.y-self.r,self.x+self.r,self.y+self.r,outline=self.color,fill=self.color)
 		for n in self.nodes:
@@ -181,13 +194,13 @@ class Space:
 		self.ATOMRADIUS = 10
 		self.BOND_KOEFF = 0.2
 		self.BONDR = 4
-		self.ATTRACT_KOEFF= 0.25
+		self.ATTRACT_KOEFF= 1
 		self.ATTRACTR = 5*self.ATOMRADIUS
 		self.ROTA_KOEFF = 0.00005
 		self.DETRACT1 = -3
 		self.DETRACT_KOEFF1 = 15
-		self.DETRACT2 = 5
-		self.DETRACT_KOEFF2= 5
+		self.DETRACT2 = 3
+		self.DETRACT_KOEFF2= 4
 		self.MAXVELOCITY = 1
 		self.t = -1
 		self.atoms = []	
@@ -219,8 +232,10 @@ class Space:
 		self.competitive = tk.BooleanVar()
 		self.competitive.set(True)
 		self.bondlock = tk.BooleanVar()
-		self.update_delta= tk.IntVar(value=5)
 		self.bondlock.set(False)
+		self.update_delta= tk.IntVar(value=5)
+		self.show_q = tk.BooleanVar()
+		self.show_q.set(True)
 		self.root.title("Mychem")
 		self.root.resizable(0, 0)
 		self.menu_bar = tk.Menu(self.root)
@@ -350,7 +365,10 @@ class Space:
 		if keysym=='0':
 			self.createtype=100
 			self.adding_mode = True
-		if keysym=='r':			
+		if keysym=='q':			
+			self.show_q.set(not self.show_q.get())
+			self.update_canvas()
+		if keysym=='r':		
 			self.reset()
 		if self.adding_mode:
 			self.status_bar.set("Adding element "+ str(self.createtype))
@@ -375,7 +393,7 @@ class Space:
 	
 	def handle_del(self,event=None):
 		if self.moving_mode:
-			self.atoms.remove(self.newatom)
+			#self.atoms.remove(self.newatom)
 			self.newatom=None
 			self.moving_mode = False
 			self.status_bar.set("Deleted")
@@ -427,6 +445,7 @@ class Space:
 		self.numpy2atoms()
 		self.newatom.vx=0
 		self.newatom.vy=0
+		self.appendatom(self.newatom)
 		self.newatom=None
 		self.moving_mode = False
 		self.status_bar.set("Dropped")
@@ -476,7 +495,8 @@ class Space:
 					#remove from nears
 					#for i in range(0,len(self.atoms)):
 #						for j in range(0,len(self.atom[i].near)):
-					#self.atoms.remove(a)
+					self.atoms.remove(a)
+					self.atoms2numpy()
 					self.moving_offsetx = a.x-event.x
 					self.moving_offsety = a.y-event.y
 					self.newatom = a
@@ -653,6 +673,8 @@ class Space:
 				else:
 					n.canvas_id = self.canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=atom_i.UNBONDEDCOLOR,fill=atom_i.UNBONDEDCOLOR)
 			#self.canvas.create_text(self.np_x[i],self.np_y[i], text=str(i),fill="red",font="Verdana 6")
+			if self.show_q.get():
+				self.canvas.create_text(self.np_x[i],self.np_y[i], text=str(int(self.np_q[i])),fill="white" if atom_i.type!=4 else "black",font="Verdana 6")
 		if self.adding_mode or self.moving_mode:
 			self.newatom.draw(self.canvas)
 		if self.merge_mode:
@@ -682,12 +704,13 @@ class Space:
 	def sim_pause(self):
 		self.numpy2atoms()
 		self.pause = True
+		self.status_bar.settime(self.t)
+		self.status_bar.setinfo("Number of atoms: "+str(len(self.atoms)))
 		self.status_bar.set("Paused")
 
 	def appendatom(self,a):
 		a.space = self
 		self.atoms.append(a)
-		#a.draw(self)
 
 	def appendmixer(self,n=1):
 		for i in range(0,n):
@@ -704,7 +727,6 @@ class Space:
 		frame = {}
 		frame["time"] = self.t
 		frame["atoms"] = []
-		#frame["mixers"] = []
 		N = len(self.atoms)
 		for i in range(0,N):
 			atom = {}
@@ -726,9 +748,6 @@ class Space:
 			self.exportf = open("output/" + self.export_file, "a")
 		self.exportf.write(self.make_export()+"\n")
 
-		#			j = 
-	
-
 	def atoms2numpy(self):
 		N = len(self.atoms)
 		self.np_r = np.empty((N))
@@ -742,6 +761,7 @@ class Space:
 		self.np_vf = np.empty((N))
 		self.np_type = np.empty((N))
 		self.np_m = np.empty((N))
+		self.np_q = np.empty((N))
 
 		for i in range(0,N):
 			atom_i = self.atoms[i]
@@ -755,6 +775,7 @@ class Space:
 			self.np_ay[i]=atom_i.ay
 			self.np_f[i]=atom_i.f
 			self.np_vf[i]=atom_i.vf
+			self.np_q[i]=atom_i.q
 			self.np_type[i]=atom_i.type
 		self.np_SUMRADIUS = np.add.outer(self.np_r,self.np_r)
 		self.np_SUMRADIUS_D1 = self.np_SUMRADIUS + self.DETRACT1
@@ -771,6 +792,18 @@ class Space:
 			atom_i.ax=self.np_ax[i]
 			atom_i.ay=self.np_ay[i]
 			atom_i.f=self.np_f[i]
+			atom_i.q=self.np_q[i]
+
+	def np_next(self):
+			self.np_vx *=0.9999
+			self.np_vy *=0.9999
+			self.np_vf *=0.99
+			self.np_vx += self.np_ax
+			self.np_vy += self.np_ay
+			self.np_x += self.np_vx
+			self.np_y += self.np_vy
+			self.np_f += self.np_vf
+
 
 	def np_limits(self): 
 		self.np_vx[self.np_vx< -self.MAXVELOCITY] = -self.MAXVELOCITY
@@ -839,34 +872,20 @@ class Space:
 #					a=0	
 			debug = False
 			delta_x = np.subtract.outer(self.np_x, self.np_x)
-			if debug:print("np_x=",self.np_x)
-			if debug:print("delta_x=",delta_x)
 			delta_y = np.subtract.outer(self.np_y, self.np_y)
 			r2 = delta_x*delta_x + delta_y*delta_y
 			r = np.sqrt(r2)
 			r_reciproc = np.reciprocal(r,where=r!=0)
-			
-			if debug:print("r=",r)
-			if debug:print("r_reci=",r_reciproc)
-			if debug:print("r<d1", r<self.np_SUMRADIUS_D1)
 			a[r<self.np_SUMRADIUS_D1] = (r_reciproc*self.DETRACT_KOEFF1)[r<self.np_SUMRADIUS_D1]
 			a[r<self.np_SUMRADIUS_D2] = (r_reciproc*self.DETRACT_KOEFF2)[r<self.np_SUMRADIUS_D2]
-			
-			if debug:print("a=", a)
-#			r[r==0]=0
-#					if self.competitive.get() and not atom_i.type==100:
-#						Q = atom_i.q*atom_j.q
-#						a+= Q/r*self.ATTRACT_KOEFF
-			
+			if self.competitive.get():
+						Q = np.outer(self.np_q, self.np_q)
+						a += np.divide(Q,r,where=r!=0)*self.ATTRACT_KOEFF
+			np.fill_diagonal(a,0)
 			a_x = np.divide(delta_x,r,where=r!=0) *a
-			np.fill_diagonal(a_x,0)
-			if debug:print("ax=",a_x)
 			a_y = np.divide(delta_y,r,where=r!=0) *a
-			np.fill_diagonal(a_y,0)
 			Ex = a_x.sum(axis=1)
-			if debug:print("Ex=",Ex)
 			Ey = a_y.sum(axis=1)
-			if debug:print("Ey=",Ey)
 			for i in range(0,N):
 				naf = 0
 				jj = np.where(np.logical_and(r[i]>0,r[i]<40))
@@ -896,13 +915,19 @@ class Space:
 							a = 0
 							if rn<self.BONDR and not n1.bonded and not n2.bonded:
 								n1.bond(n2)
+								self.np_q[i] = atom_i.calculate_q()
+								self.np_q[j] = atom_j.calculate_q()
 							if rn>self.BONDR and n1.pair == n2:
 								if not self.bondlock.get():
 									n1.unbond()
+									self.np_q[i] = atom_i.calculate_q()
+									self.np_q[j] = atom_j.calculate_q()
 							if n1.pair == n2:
 								if (rn>0): 
 									a = -r2n*self.BOND_KOEFF
 									naf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+self.np_f[i])*atom_i.r * delta_y + delta_x*sin(n1.f+self.np_f[i])*atom_i.r)
+							if not n1.bonded and not n2.bonded:
+								naf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+self.np_f[i])*atom_i.r * delta_y + delta_x*sin(n1.f+self.np_f[i])*atom_i.r)									
 
 							nEx += delta_x/rn * a
 							nEy += delta_y/rn * a
@@ -913,29 +938,17 @@ class Space:
 
 				Ex[i] += allnEx
 				Ey[i] += allnEy
-			if debug:print("Ex=",Ex)
 			self.np_ax= K*Ex/self.np_m
-			if debug: print("np_ax", self.np_ax)
 			self.np_ay= K*Ey/self.np_m
-			if debug: print("np_ay", self.np_ay)
 			if self.gravity.get():
 				self.np_ay += self.g
-					
+
+			#set mixers velocity		
 			if len(self.mixers)>0:
 				self.np_vx[np.logical_and(self.np_type==100,self.np_vx>=0)] = 1
 				self.np_vx[np.logical_and(self.np_type==100,self.np_vx<0)] = -1
 				self.np_vy[np.logical_and(self.np_type==100,self.np_vy>=0)] = 1
 				self.np_vy[np.logical_and(self.np_type==100,self.np_vy<0)] = -1
-
-#				for m in self.mixers:
-#					if m.vx>=0:
-#						m.vx =1
-#					if m.vx<0:	
-#						m.vx = -1
-#					if m.vy>=0:
-#						m.vy =1
-#					if m.vy<0:
-#						m.vy = -1
 
 			if self.action:
 				self.action(self)
@@ -945,30 +958,13 @@ class Space:
 				self.newatom.x=cx + self.moving_offsetx
 				self.newatom.y=cy + self.moving_offsety
 
-
-			self.np_vx *=0.9999
-			self.np_vy *=0.9999
-			self.np_vf *=0.99
-#			for i in range(0,N):
-#				atom_i=self.atoms[i]
-#				atom_i.calculate_q()
-#				atom_i.next()
-			self.np_vx += self.np_ax
-			if debug: print("np_vx", self.np_vx)
-			self.np_vy += self.np_ay
-			self.np_x += self.np_vx
-			self.np_y += self.np_vy
-			self.np_f += self.np_vf
+			self.np_next()
 			self.np_limits()
-			#self.numpy2atoms()
+
+			#update screen
 			if (self.t%self.update_delta.get()==0):
 				self.update_canvas()
 			
-			#  canvas.after(1)
-			#	if(time%1 ==0):  
-			#		for i in range(0,N):	
-
-
 			if self.recording:
 					save_widget_as_image(self.canvas,'output/'+str(self.t)+'.png')
 			if self.export:
@@ -977,8 +973,6 @@ class Space:
 			if self.stoptime!= -1:
 				if self.t>self.stoptime:
 					self.sim_pause()
-			
-
 
 			if self.t%100 ==0:
 				self.status_bar.settime(self.t)
@@ -1019,10 +1013,12 @@ class OptionsFrame():
 		#a.geometry('200x150')
 		self.frame = tk.Frame(a, bd=5, relief=tk.SUNKEN)
 		self.frame.pack()
-		self.label = tk.Label(self.frame, text= "Update delta")
-		self.label.pack(side=tk.LEFT)
-		self.update_slider = tk.Scale(self.frame, from_=1, to=100, orient=tk.HORIZONTAL,variable=self.space.update_delta).pack()
+		label = tk.Label(self.frame, text= "Update delta").pack(side=tk.LEFT)
+		self.update_slider = tk.Scale(self.frame, from_=1, to=100, orient=tk.HORIZONTAL,variable=self.space.update_delta)
 		self.update_slider.pack()
+		checkbox = tk.Checkbutton(self.frame, text="Show Q", variable=self.space.show_q)
+		checkbox.pack(side=tk.LEFT)
+
 #	def set_update_delta(self,value):
 #		self.space.update_delta=value
 
