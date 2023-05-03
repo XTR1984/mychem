@@ -354,6 +354,7 @@ class Space:
 			self.reset()
 		if self.adding_mode:
 			self.status_bar.set("Adding element "+ str(self.createtype))
+			self.numpy2atoms()
 			self.make_newatom()
 			self.atoms2numpy()
 			self.update_canvas()
@@ -423,6 +424,7 @@ class Space:
 
 	def drop_atom(self):
 		#self.appendatom(self.newatom)
+		self.numpy2atoms()
 		self.newatom.vx=0
 		self.newatom.vy=0
 		self.newatom=None
@@ -549,6 +551,7 @@ class Space:
 		self.pause=True
 		self.atoms = []	
 		self.mixers = []
+		self.atoms2numpy()
 		self.canvas.delete("all")
 		self.status_bar.set("New file")
 
@@ -918,8 +921,12 @@ class Space:
 			if self.gravity.get():
 				self.np_ay += self.g
 					
+			if len(self.mixers)>0:
+				self.np_vx[np.logical_and(self.np_type==100,self.np_vx>=0)] = 1
+				self.np_vx[np.logical_and(self.np_type==100,self.np_vx<0)] = -1
+				self.np_vy[np.logical_and(self.np_type==100,self.np_vy>=0)] = 1
+				self.np_vy[np.logical_and(self.np_type==100,self.np_vy<0)] = -1
 
-#			if len(self.mixers)>0:
 #				for m in self.mixers:
 #					if m.vx>=0:
 #						m.vx =1
