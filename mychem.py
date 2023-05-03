@@ -619,8 +619,6 @@ class Space:
 		self.status_bar.set("Reset to previos loaded")
 	
 
-
-
 	def update_canvas(self):
 		self.canvas.delete("all")
 		N = len(self.atoms)
@@ -634,7 +632,7 @@ class Space:
 					n.canvas_id = self.canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=atom_i.BONDEDCOLOR,fill=atom_i.BONDEDCOLOR)
 				else:
 					n.canvas_id = self.canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=atom_i.UNBONDEDCOLOR,fill=atom_i.UNBONDEDCOLOR)
-
+			#self.canvas.create_text(self.np_x[i],self.np_y[i], text=str(i),fill="red",font="Verdana 6")
 		if self.adding_mode or self.moving_mode:
 			self.newatom.draw(self.canvas)
 		if self.merge_mode:
@@ -726,20 +724,18 @@ class Space:
 		self.np_m = np.empty((N))
 
 		for i in range(0,N):
-			self.np_r[i]=self.atoms[i].r
-			self.np_m[i]=self.atoms[i].m
-			self.np_x[i]=self.atoms[i].x
-			try:
-				self.np_y[i]=self.atoms[i].y
-			except:
-				print(self.atoms[i].y)
-			self.np_vx[i]=self.atoms[i].vx
-			self.np_vy[i]=self.atoms[i].vy
-			self.np_ax[i]=self.atoms[i].ax
-			self.np_ay[i]=self.atoms[i].ay
-			self.np_f[i]=self.atoms[i].f
-			self.np_vf[i]=self.atoms[i].vf
-			self.np_type[i]=self.atoms[i].type
+			atom_i = self.atoms[i]
+			self.np_r[i]=atom_i.r
+			self.np_m[i]=atom_i.m
+			self.np_x[i]=atom_i.x
+			self.np_y[i]=atom_i.y
+			self.np_vx[i]=atom_i.vx
+			self.np_vy[i]=atom_i.vy
+			self.np_ax[i]=atom_i.ax
+			self.np_ay[i]=atom_i.ay
+			self.np_f[i]=atom_i.f
+			self.np_vf[i]=atom_i.vf
+			self.np_type[i]=atom_i.type
 		self.np_SUMRADIUS = np.add.outer(self.np_r,self.np_r)
 		self.np_SUMRADIUS_D1 = self.np_SUMRADIUS + self.DETRACT1
 		self.np_SUMRADIUS_D2 = self.np_SUMRADIUS + self.DETRACT2
@@ -747,14 +743,14 @@ class Space:
 	def numpy2atoms(self):
 		N = len(self.atoms)
 		for i in range(0,N):
-			self.atoms[i].x=self.np_x[i]
-			self.atoms[i].y=self.np_y[i]
-			self.atoms[i].vx=self.np_vx[i]
-			self.atoms[i].vy=self.np_vy[i]
-			self.atoms[i].ax=self.np_ax[i]
-			self.atoms[i].ay=self.np_ay[i]
-			self.atoms[i].f=self.np_f[i]
-			#self.np_vf[i]=self.atoms[i].vf
+			atom_i = self.atoms[i]
+			atom_i.x=self.np_x[i]
+			atom_i.y=self.np_y[i]
+			atom_i.vx=self.np_vx[i]
+			atom_i.vy=self.np_vy[i]
+			atom_i.ax=self.np_ax[i]
+			atom_i.ay=self.np_ay[i]
+			atom_i.f=self.np_f[i]
 
 	def np_limits(self): 
 		
@@ -762,10 +758,27 @@ class Space:
 		self.np_vx[self.np_vx> self.MAXVELOCITY] = self.MAXVELOCITY
 		self.np_vy[self.np_vy< -self.MAXVELOCITY] = -self.MAXVELOCITY
 		self.np_vy[self.np_vy> self.MAXVELOCITY] = self.MAXVELOCITY
+		self.np_f[self.np_f> 2*PI] -=2*PI
+		self.np_f[self.np_f< 0] += 2*PI
 
+
+#		if self.x < self.r: 
+#			self.vx= -self.vx
+#			self.x = self.r
+#		if self.x>self.space.WIDTH-self.r : 
+#			self.vx= -self.vx
+#			self.x = self.space.WIDTH-self.r
+#		if self.y < self.r:
+#			self.vy= -self.vy
+#			self.y = self.r
+#		if self.y>self.space.HEIGHT-self.r : 
+#			self.vy= -self.vy
+#			self.y= self.space.HEIGHT-self.r
+		
 
 	def go(self):	
 		self.timer = 1
+		self.stoptime = 1000
 		self.resetdata = self.make_export()
 		self.atoms2numpy()
 		self.root.after(self.timer,self.mainloop)
@@ -804,32 +817,36 @@ class Space:
 #
 #				for atom_j in atom_i.near:
 #					a=0	
+			debug = False
 			delta_x = np.subtract.outer(self.np_x, self.np_x)
+			if debug:print("np_x=",self.np_x)
+			if debug:print("delta_x=",delta_x)
 			delta_y = np.subtract.outer(self.np_y, self.np_y)
 			r2 = delta_x*delta_x + delta_y*delta_y
 			r = np.sqrt(r2)
-#					if r2 == 0:
-#						continue;
-
-					# a> 0 отталкивание
 			r_reciproc = np.reciprocal(r,where=r!=0)
-			#print(r)
-			#print(r_reciproc)
+			
+			if debug:print("r=",r)
+			if debug:print("r_reci=",r_reciproc)
+			if debug:print("r<d1", r<self.np_SUMRADIUS_D1)
 			a[r<self.np_SUMRADIUS_D1] = (r_reciproc*self.DETRACT_KOEFF1)[r<self.np_SUMRADIUS_D1]
 			a[r<self.np_SUMRADIUS_D2] = (r_reciproc*self.DETRACT_KOEFF2)[r<self.np_SUMRADIUS_D2]
-			#print("a=", a)
-			r[r==0]=0
+			
+			if debug:print("a=", a)
+#			r[r==0]=0
 #					if self.competitive.get() and not atom_i.type==100:
 #						Q = atom_i.q*atom_j.q
 #						a+= Q/r*self.ATTRACT_KOEFF
 			
-			a_x = np.divide(delta_x,r,where=r!=0)
-			a_x = a_x * a 
-			#print("ax=",a_x)
-			a_y = np.divide(delta_x,r,where=r!=0) *a
-			Ex = a_x.sum(axis=0)
-			#print("Ex=",Ex)
-			Ey = a_y.sum(axis=0)
+			a_x = np.divide(delta_x,r,where=r!=0) *a
+			np.fill_diagonal(a_x,0)
+			if debug:print("ax=",a_x)
+			a_y = np.divide(delta_y,r,where=r!=0) *a
+			np.fill_diagonal(a_y,0)
+			Ex = a_x.sum(axis=1)
+			if debug:print("Ex=",Ex)
+			Ey = a_y.sum(axis=1)
+			if debug:print("Ey=",Ey)
 			for i in range(0,N):
 				naf = 0
 				jj = np.where(np.logical_and(r[i]>0,r[i]<40))
@@ -876,8 +893,11 @@ class Space:
 
 				Ex[i] += allnEx
 				Ey[i] += allnEy
+			if debug:print("Ex=",Ex)
 			self.np_ax= K*Ex/self.np_m
+			if debug: print("np_ax", self.np_ax)
 			self.np_ay= K*Ey/self.np_m
+			if debug: print("np_ay", self.np_ay)
 			if self.gravity.get():
 				self.np_ay += self.g
 					
@@ -910,6 +930,7 @@ class Space:
 #				atom_i.calculate_q()
 #				atom_i.next()
 			self.np_vx += self.np_ax
+			if debug: print("np_vx", self.np_vx)
 			self.np_vy += self.np_ay
 			self.np_x += self.np_vx
 			self.np_y += self.np_vy
