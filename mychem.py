@@ -751,51 +751,46 @@ class Space:
 					allnEy = 0
 					naf = 0
 
+					if r<30: 
+						for n1 in atom_i.nodes:
+							n1x = atom_i.x + cos(n1.f+atom_i.f)*atom_i.r
+							n1y = atom_i.y - sin(n1.f+atom_i.f)*atom_i.r
 
-					for n1 in atom_i.nodes:
-						n1x = atom_i.x + cos(n1.f+atom_i.f)*atom_i.r
-						n1y = atom_i.y - sin(n1.f+atom_i.f)*atom_i.r
+							nEx = 0
+							nEy = 0
+							naf = 0
+							for n2 in atom_j.nodes:
+								n2x = atom_j.x + cos(n2.f+atom_j.f)*atom_j.r
+								n2y = atom_j.y - sin(n2.f+atom_j.f)*atom_j.r
+								delta_x = n1x-n2x
+								delta_y = n1y-n2y
+								r2n = delta_x*delta_x + delta_y*delta_y
+								rn = sqrt(r2n) 
+								if rn==0: continue
+								a = 0
+								if rn<self.BONDR and not n1.bonded and not n2.bonded:
+									n1.bond(n2)
+	#								self.calculate_q(atom_i)	
+	#								self.calculate_q(atom_j)
+								if rn>self.BONDR and n1.pair == n2:
+									if not self.bondlock.get():
+										n1.unbond()
+	#									self.calculate_q(atom_i)	
+	#									self.calculate_q(atom_j)
+								if n1.pair == n2:
+									if (rn>0): 
+										a = -r2n*self.BOND_KOEFF
+										naf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+atom_i.f)*atom_i.r * delta_y + delta_x*sin(n1.f+atom_i.f)*atom_i.r)
+	
+								nEx = nEx + delta_x/rn * a
+								nEy = nEy + delta_y/rn * a
 
-						nEx = 0
-						nEy = 0
-						naf = 0
-						for n2 in atom_j.nodes:
-							n2x = atom_j.x + cos(n2.f+atom_j.f)*atom_j.r
-							n2y = atom_j.y - sin(n2.f+atom_j.f)*atom_j.r
-							delta_x = n1x-n2x
-							delta_y = n1y-n2y
-							r2n = delta_x*delta_x + delta_y*delta_y
-							rn = sqrt(r2n) 
-							if rn==0: continue
-							a = 0
-							if rn<self.BONDR and not n1.bonded and not n2.bonded:
-								n1.bond(n2)
-#								self.calculate_q(atom_i)	
-#								self.calculate_q(atom_j)
-							if rn>self.BONDR and n1.pair == n2:
-								if not self.bondlock.get():
-									n1.unbond()
-#									self.calculate_q(atom_i)	
-#									self.calculate_q(atom_j)
-							if n1.pair == n2:
-								if (rn>0): 
-									a = -r2n*self.BOND_KOEFF
-									naf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+atom_i.f)*atom_i.r * delta_y + delta_x*sin(n1.f+atom_i.f)*atom_i.r)
-							#if not n1.bonded and not n2.bonded and rn<self.ATTRACTatom_i.qR and r>self.ATOMRADIUS	:
-							#if self.competitive.get():
-							#	a += 1/rn*self.ATTRACT_KOEFF*Q
-							#	naf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+atom_i.f)*atom_i.r * delta_y + delta_x*sin(n1.f+atom_i.f)*atom_i.r)
+							allnEx = allnEx + nEx
+							allnEy = allnEy + nEy
+							atom_i.vf = atom_i.vf + naf
 
-
-							nEx = nEx + delta_x/rn * a
-							nEy = nEy + delta_y/rn * a
-
-						allnEx = allnEx + nEx
-						allnEy = allnEy + nEy
-						atom_i.vf = atom_i.vf + naf
-
-					Ex+= allnEx
-					Ey+= allnEy
+						Ex+= allnEx
+						Ey+= allnEy
 				atom_i.ax= K*Ex/atom_i.m 
 				atom_i.ay= K*Ey/atom_i.m				
 				if self.gravity.get():
