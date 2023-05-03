@@ -9,6 +9,7 @@ import random
 import os
 import json
 from json import encoder
+import numpy as np
 #encoder.FLOAT_REPR = lambda o: format(o, '.3f')
 
 PI = 3.1415926535
@@ -160,12 +161,13 @@ class Atom:
 
 	def next(self):
 		if not self.fixed:
-			self.vx = self.vx + self.ax
-			self.vy = self.vy + self.ay
-			self.vf = self.vf + self.af
-			self.x  = self.x+self.vx
-			self.y  = self.y+self.vy
-			self.f  = self.f+self.vf
+#			self.vx = self.vx + self.ax
+#			self.vy = self.vy + self.ay
+#			self.vf = self.vf + self.af
+#			self.x  = self.x+self.vx
+#			self.y  = self.y+self.vy
+#			self.f  = self.f+self.vf
+
 			self.limits()
 
 		
@@ -186,6 +188,7 @@ class Space:
 		self.DETRACT_KOEFF1 = 15
 		self.DETRACT2 = 5
 		self.DETRACT_KOEFF2= 5
+		self.MAXVELOCITY = 1
 		self.t = -1
 		self.atoms = []	
 		self.mixers = []
@@ -335,6 +338,7 @@ class Space:
 		if self.adding_mode:
 			self.status_bar.set("Adding element "+ str(self.createtype))
 			self.make_newatom()
+			self.atoms2numpy()
 			self.update_canvas()
 		#print(event.keysym)
 
@@ -407,6 +411,7 @@ class Space:
 		self.newatom=None
 		self.moving_mode = False
 		self.status_bar.set("Dropped")
+		self.atoms2numpy()
 		self.update_canvas()
 
 
@@ -432,6 +437,7 @@ class Space:
 
 	def handle_button1(self, event):
 		if self.adding_mode and not self.moving_mode:
+			self.numpy2atoms()
 			#a= Atom(event.x,event.y, self.createtype)
 			self.appendatom(self.newatom)
 			self.createf = self.newatom.f
@@ -439,9 +445,11 @@ class Space:
 				self.mixers.append(self.newatom)
 				self.status_bar.set("New mixer!")
 			self.make_newatom()
+			self.atoms2numpy()
 			self.update_canvas()
 		if not(self.moving_mode or self.adding_mode or self.merge_mode):
 			x, y = event.x, event.y
+			self.numpy2atoms()
 			for a in self.atoms:
 				bbox = self.canvas.bbox(a.canvas_id)
 				if bbox[0] <= x <= bbox[2] and bbox[1] <= y <= bbox[3]:
@@ -456,6 +464,7 @@ class Space:
 					self.moving_mode = True
 					self.status_bar.set("Let's move")
 					break
+			self.atoms2numpy()
 			self.update_canvas()
           #  	break
 		elif self.moving_mode:
@@ -467,6 +476,7 @@ class Space:
 			self.merge_atoms = []
 			self.merge_mixers = []
 			self.canvas.configure(cursor="tcross")
+			self.atoms2numpy()
 			self.update_canvas()
 			self.resetdata = self.make_export()
 			self.status_bar.set("Merge finished")
@@ -477,6 +487,7 @@ class Space:
 			self.newatom.x=cx+self.moving_offsetx
 			self.newatom.y=cy+self.moving_offsety
 			if self.pause:
+				#self.atoms2numpy()
 				self.update_canvas()
 		if self.merge_mode:
 			(cx,cy) = self.getpointer()
@@ -486,6 +497,7 @@ class Space:
 			self.merge_offsetx = cx
 			self.merge_offsety = cy
 			self.changed=True
+			#self.atoms2numpy()
 			self.update_canvas()
 	
 	def handle_wheel(self,event=None):
@@ -552,6 +564,7 @@ class Space:
 				self.appendatom(aa)
 				if type == 100:
 					self.mixers.append(aa)
+		self.atoms2numpy()					
 		self.update_canvas()
 
 
@@ -610,8 +623,17 @@ class Space:
 
 	def update_canvas(self):
 		self.canvas.delete("all")
-		for a in self.atoms:
-			a.draw(self.canvas)
+		N = len(self.atoms)
+		for i in range(0,N):
+			atom_i = self.atoms[i]
+			atom_i.canvas_id = self.canvas.create_oval(self.np_x[i]-atom_i.r,self.np_y[i]-atom_i.r,self.np_x[i]+atom_i.r,self.np_y[i]+atom_i.r,outline=atom_i.color,fill=atom_i.color)
+			for n in atom_i.nodes:
+				nx = self.np_x[i] + cos(n.f+self.np_f[i])*atom_i.r
+				ny = self.np_y[i] - sin(n.f+self.np_f[i])*atom_i.r
+				if n.bonded:
+					n.canvas_id = self.canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=atom_i.BONDEDCOLOR,fill=atom_i.BONDEDCOLOR)
+				else:
+					n.canvas_id = self.canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=atom_i.UNBONDEDCOLOR,fill=atom_i.UNBONDEDCOLOR)
 
 		if self.adding_mode or self.moving_mode:
 			self.newatom.draw(self.canvas)
@@ -635,10 +657,12 @@ class Space:
 
 
 	def sim_run(self):
+		self.atoms2numpy()
 		self.pause = False
 		self.status_bar.set("Running")
 
 	def sim_pause(self):
+		self.numpy2atoms()
 		self.pause = True
 		self.status_bar.set("Paused")
 
@@ -686,82 +710,147 @@ class Space:
 
 		#			j = 
 	
+
+	def atoms2numpy(self):
+		N = len(self.atoms)
+		self.np_r = np.empty((N))
+		self.np_x = np.empty((N))
+		self.np_y = np.empty((N))
+		self.np_vx =np.empty((N))
+		self.np_vy = np.empty((N))
+		self.np_ax = np.empty((N))
+		self.np_ay = np.empty((N))
+		self.np_f = np.empty((N))
+		self.np_vf = np.empty((N))
+		self.np_type = np.empty((N))
+		self.np_m = np.empty((N))
+
+		for i in range(0,N):
+			self.np_r[i]=self.atoms[i].r
+			self.np_m[i]=self.atoms[i].m
+			self.np_x[i]=self.atoms[i].x
+			try:
+				self.np_y[i]=self.atoms[i].y
+			except:
+				print(self.atoms[i].y)
+			self.np_vx[i]=self.atoms[i].vx
+			self.np_vy[i]=self.atoms[i].vy
+			self.np_ax[i]=self.atoms[i].ax
+			self.np_ay[i]=self.atoms[i].ay
+			self.np_f[i]=self.atoms[i].f
+			self.np_vf[i]=self.atoms[i].vf
+			self.np_type[i]=self.atoms[i].type
+		self.np_SUMRADIUS = np.add.outer(self.np_r,self.np_r)
+		self.np_SUMRADIUS_D1 = self.np_SUMRADIUS + self.DETRACT1
+		self.np_SUMRADIUS_D2 = self.np_SUMRADIUS + self.DETRACT2
+
+	def numpy2atoms(self):
+		N = len(self.atoms)
+		for i in range(0,N):
+			self.atoms[i].x=self.np_x[i]
+			self.atoms[i].y=self.np_y[i]
+			self.atoms[i].vx=self.np_vx[i]
+			self.atoms[i].vy=self.np_vy[i]
+			self.atoms[i].ax=self.np_ax[i]
+			self.atoms[i].ay=self.np_ay[i]
+			self.atoms[i].f=self.np_f[i]
+			#self.np_vf[i]=self.atoms[i].vf
+
+	def np_limits(self): 
+		
+		self.np_vx[self.np_vx< -self.MAXVELOCITY] = -self.MAXVELOCITY
+		self.np_vx[self.np_vx> self.MAXVELOCITY] = self.MAXVELOCITY
+		self.np_vy[self.np_vy< -self.MAXVELOCITY] = -self.MAXVELOCITY
+		self.np_vy[self.np_vy> self.MAXVELOCITY] = self.MAXVELOCITY
+
+
 	def go(self):	
+		self.timer = 1
 		self.resetdata = self.make_export()
-		self.root.after(1,self.mainloop)
+		self.atoms2numpy()
+		self.root.after(self.timer,self.mainloop)
 		self.root.mainloop()
 	
 	def mainloop(self):
 			K = 1
-			if self.pause:
-				self.root.after(100,self.mainloop)
-				return
 			N = len(self.atoms)
 			if N==0:
 				self.sim_pause()
+			if self.pause:
+				self.root.after(100,self.mainloop)
+				return
 			self.t +=1
-			for i in range(0,N):
-				atom_i = self.atoms[i]
-				Ex=0
-				Ey=0
-				a = 0
-				if self.t%30==0 or self.changed==True:
-					for j in range(0,N):
-						atom_j = self.atoms[j]
-						a=0	
-						if i==j: continue
-			
-						delta_x = atom_i.x-atom_j.x
-						delta_y = atom_i.y-atom_j.y
-						r2 = delta_x*delta_x + delta_y*delta_y
-						r = sqrt(r2)
-						if r<self.ATOMRADIUS*8 and not atom_j in atom_i.near:
-							atom_i.near.append(atom_j)
-						if r>=self.ATOMRADIUS*8: 
-							try:
-								atom_i.near.remove(atom_j)
-							except:
-								pass
-
-				for atom_j in atom_i.near:
-					a=0	
-					delta_x = atom_i.x-atom_j.x
-					delta_y = atom_i.y-atom_j.y
-					r2 = delta_x*delta_x+ delta_y*delta_y
-					r = sqrt(r2)
-					SUMRADIUS = atom_i.r+atom_j.r
-					#AVGRADIUS = SUMRADIUS/2
-					if r2 == 0:
-						continue;
+			Ex=np.zeros(N)
+			Ey=np.zeros(N)
+			a = np.zeros((N,N))
+			#ones = np.ones((N,N)
+#				if self.t%30==0 or self.changed==True:
+#					for j in range(0,N):
+#						atom_j = self.atoms[j]
+#						a=0	
+#						if i==j: continue
+#			
+#						delta_x = atom_i.x-atom_j.x
+#						delta_y = atom_i.y-atom_j.y
+#						r2 = delta_x*delta_x + delta_y*delta_y
+#						r = sqrt(r2)
+#						if r<self.ATOMRADIUS*8 and not atom_j in atom_i.near:
+#							atom_i.near.append(atom_j)
+#						if r>=self.ATOMRADIUS*8: 
+#							try:
+#								atom_i.near.remove(atom_j)
+#							except:
+#								pass
+#
+#				for atom_j in atom_i.near:
+#					a=0	
+			delta_x = np.subtract.outer(self.np_x, self.np_x)
+			delta_y = np.subtract.outer(self.np_y, self.np_y)
+			r2 = delta_x*delta_x + delta_y*delta_y
+			r = np.sqrt(r2)
+#					if r2 == 0:
+#						continue;
 
 					# a> 0 отталкивание
-					if r<SUMRADIUS+self.DETRACT1:
-						a = 1/r*self.DETRACT_KOEFF1
-
-					if r<SUMRADIUS+self.DETRACT2:
-						a = 1/r*self.DETRACT_KOEFF2
-
-					if self.competitive.get() and not atom_i.type==100:
-						Q = atom_i.q*atom_j.q
-						a+= Q/r*self.ATTRACT_KOEFF
-
-					Ex = Ex + delta_x/r *a
-					Ey = Ey + delta_y/r *a
-					allnEx = 0
-					allnEy = 0
-					naf = 0
-
-
+			r_reciproc = np.reciprocal(r,where=r!=0)
+			#print(r)
+			#print(r_reciproc)
+			a[r<self.np_SUMRADIUS_D1] = (r_reciproc*self.DETRACT_KOEFF1)[r<self.np_SUMRADIUS_D1]
+			a[r<self.np_SUMRADIUS_D2] = (r_reciproc*self.DETRACT_KOEFF2)[r<self.np_SUMRADIUS_D2]
+			#print("a=", a)
+			r[r==0]=0
+#					if self.competitive.get() and not atom_i.type==100:
+#						Q = atom_i.q*atom_j.q
+#						a+= Q/r*self.ATTRACT_KOEFF
+			
+			a_x = np.divide(delta_x,r,where=r!=0)
+			a_x = a_x * a 
+			#print("ax=",a_x)
+			a_y = np.divide(delta_x,r,where=r!=0) *a
+			Ex = a_x.sum(axis=0)
+			#print("Ex=",Ex)
+			Ey = a_y.sum(axis=0)
+			for i in range(0,N):
+				naf = 0
+				jj = np.where(np.logical_and(r[i]>0,r[i]<40))
+				
+				#print("jj=", jj)
+				allnEx = 0
+				allnEy = 0
+				for j in jj[0].tolist():
+					if j==i: continue
+					atom_i = self.atoms[i]
+					atom_j = self.atoms[j]
 					for n1 in atom_i.nodes:
-						n1x = atom_i.x + cos(n1.f+atom_i.f)*atom_i.r
-						n1y = atom_i.y - sin(n1.f+atom_i.f)*atom_i.r
+						n1x = self.np_x[i] + cos(n1.f+self.np_f[i])*atom_i.r
+						n1y = self.np_y[i] - sin(n1.f+self.np_f[i])*atom_i.r
 
 						nEx = 0
 						nEy = 0
 						naf = 0
 						for n2 in atom_j.nodes:
-							n2x = atom_j.x + cos(n2.f+atom_j.f)*atom_j.r
-							n2y = atom_j.y - sin(n2.f+atom_j.f)*atom_j.r
+							n2x = self.np_x[j] + cos(n2.f+self.np_f[j])*atom_j.r
+							n2y = self.np_y[j] - sin(n2.f+self.np_f[j])*atom_j.r
 							delta_x = n1x-n2x
 							delta_y = n1y-n2y
 							r2n = delta_x*delta_x + delta_y*delta_y
@@ -770,49 +859,39 @@ class Space:
 							a = 0
 							if rn<self.BONDR and not n1.bonded and not n2.bonded:
 								n1.bond(n2)
-#								self.calculate_q(atom_i)	
-#								self.calculate_q(atom_j)
 							if rn>self.BONDR and n1.pair == n2:
 								if not self.bondlock.get():
 									n1.unbond()
-#									self.calculate_q(atom_i)	
-#									self.calculate_q(atom_j)
 							if n1.pair == n2:
 								if (rn>0): 
 									a = -r2n*self.BOND_KOEFF
-									naf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+atom_i.f)*atom_i.r * delta_y + delta_x*sin(n1.f+atom_i.f)*atom_i.r)
-							#if not n1.bonded and not n2.bonded and rn<self.ATTRACTatom_i.qR and r>self.ATOMRADIUS	:
-							#if self.competitive.get():
-							#	a += 1/rn*self.ATTRACT_KOEFF*Q
-							#	naf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+atom_i.f)*atom_i.r * delta_y + delta_x*sin(n1.f+atom_i.f)*atom_i.r)
+									naf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+self.np_f[i])*atom_i.r * delta_y + delta_x*sin(n1.f+self.np_f[i])*atom_i.r)
 
-
-							nEx = nEx + delta_x/rn * a
-							nEy = nEy + delta_y/rn * a
+							nEx += delta_x/rn * a
+							nEy += delta_y/rn * a
 
 						allnEx = allnEx + nEx
 						allnEy = allnEy + nEy
-						atom_i.vf = atom_i.vf + naf
+						self.np_vf[i] += naf
 
-					Ex+= allnEx
-					Ey+= allnEy
-				atom_i.ax= K*Ex/atom_i.m 
-				atom_i.ay= K*Ey/atom_i.m				
-				if self.gravity.get():
-					atom_i.ay +=self.g
+				Ex[i] += allnEx
+				Ey[i] += allnEy
+			self.np_ax= K*Ex/self.np_m
+			self.np_ay= K*Ey/self.np_m
+			if self.gravity.get():
+				self.np_ay += self.g
+					
 
-			if len(self.mixers)>0:
-				for m in self.mixers:
-#						m.vx*=1.1
-#						m.vy*=1.1
-					if m.vx>=0:
-						m.vx =1
-					if m.vx<0:	
-						m.vx = -1
-					if m.vy>=0:
-						m.vy =1
-					if m.vy<0:
-						m.vy = -1
+#			if len(self.mixers)>0:
+#				for m in self.mixers:
+#					if m.vx>=0:
+#						m.vx =1
+#					if m.vx<0:	
+#						m.vx = -1
+#					if m.vy>=0:
+#						m.vy =1
+#					if m.vy<0:
+#						m.vy = -1
 
 			if self.action:
 				self.action(self)
@@ -823,14 +902,20 @@ class Space:
 				self.newatom.y=cy + self.moving_offsety
 
 
-			for i in range(0,N):
-				atom_i=self.atoms[i]
-				atom_i.vx *= 0.9999
-				atom_i.vy *= 0.9999
-				atom_i.vf *= 0.99
-				atom_i.calculate_q()
-				atom_i.next()
-			
+			self.np_vx *=0.9999
+			self.np_vy *=0.9999
+			self.np_vf *=0.99
+#			for i in range(0,N):
+#				atom_i=self.atoms[i]
+#				atom_i.calculate_q()
+#				atom_i.next()
+			self.np_vx += self.np_ax
+			self.np_vy += self.np_ay
+			self.np_x += self.np_vx
+			self.np_y += self.np_vy
+			self.np_f += self.np_vf
+			self.np_limits()
+			#self.numpy2atoms()
 			self.update_canvas()
 			
 			#  canvas.after(1)
@@ -852,7 +937,7 @@ class Space:
 			if self.t%100 ==0:
 				self.status_bar.settime(self.t)
 				self.status_bar.setinfo("Number of atoms: "+str(N))
-			self.root.after(1,self.mainloop)
+			self.root.after(self.timer,self.mainloop)
   
 
 class StatusBar(tk.Frame):
@@ -887,6 +972,7 @@ if __name__ == "__main__":
 	random.seed(1)
 	space = Space()
 	space.go()
+
 
 
 
