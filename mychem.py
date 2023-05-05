@@ -13,7 +13,7 @@ import numpy as np
 #encoder.FLOAT_REPR = lambda o: format(o, '.3f')
 
 PI = 3.1415926535
-from PIL import ImageGrab
+from PIL import ImageGrab,ImageDraw,Image,ImageTk
 
 
 #grabbed from https://stackoverflow.com/a/71600967
@@ -38,25 +38,37 @@ class Node:
 		self.pair = None
 		self.canvas_id = None
 		self.parent = parent
-		self.q = 0
-	def shift_q(self,type1,type2):
+		self.q = 1
+	def shift_q(self, n):
+		#PHCSNO
+		type1 = self.parent.type
+		type2 = n.parent.type
 		table=[5,1,4,6,3,2]
 		i1 = table.index(type1)
 		i2 = table.index(type2)
+		canbond = self.q+n.q == 2 
+		shifttable = [ [(0,0), (0,1), (0,2) ],
+				       [(0,1), (0,2), (1,2) ], 
+				       [(0,2), (1,2), (2,2) ]]
+		shifttable2 = [ [(0,0), (0,1), (1,1) ],
+				       [(1,0), (1,1), (1,2) ], 
+				       [(1,1), (2,1), (2,2) ]]
 		if i1<i2:
-			return (1,-1)
+			(self.q, n.q) = shifttable[self.q][n.q]
 		if i1>i2:
-			return (-1,1)
-		return (0,0)
+			(n.q, self.q) = shifttable[self.q][n.q]
+		if i1==i2:
+			(self.q, n.q) = shifttable2[self.q][n.q]
+		return canbond
 
 	def bond(self,n):
-		n.pair = self
-		n.bonded = True
-		self.pair = n
-		self.bonded = True
-		(s1,s2) = self.shift_q(self.parent.type, n.parent.type)
-		(self.q,n.q) = (s1,s2)
-
+		canbond = self.shift_q(n)
+		if canbond:
+			n.pair = self
+			n.bonded = True
+			self.pair = n
+			self.bonded = True
+	
 	def unbond(self):
 		if self.bonded:
 			self.pair.pair = None
@@ -126,7 +138,10 @@ class Atom:
 	def calculate_q(self):
 		q = 0
 		for n in self.nodes:
-			q+=n.q
+			if n.q==0:
+				q+=1
+			if n.q==2:
+				q-=1
 		return q
 			
 	def unbond(self):
@@ -134,7 +149,7 @@ class Atom:
 			if n.bonded:
 				p = n.pair.parent
 				n.unbond()
-				p.calculate_q()
+				p.calculate_q()	
 		self.calculate_q()
 
 	def draw(self,canvas):
@@ -145,9 +160,12 @@ class Atom:
 			if n.bonded:
 				n.canvas_id = canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=self.BONDEDCOLOR,fill=self.BONDEDCOLOR)
 			else:
-				n.canvas_id = canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=self.UNBONDEDCOLOR,fill=self.UNBONDEDCOLOR)
-
-
+				if n.q==1:
+					n.canvas_id = canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=self.UNBONDEDCOLOR,fill=self.UNBONDEDCOLOR)
+				if n.q==0:
+					n.canvas_id = canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline="red",fill="red")
+				if n.q==2:
+					n.canvas_id = canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline="blue",fill="blue")
 
 	def limits(self):
 		if self.vx < -self.MAXVELOCITY: self.vx=-self.MAXVELOCITY
@@ -187,6 +205,7 @@ class Atom:
 
 class Space:
 	def __init__(self,width=1024,height=576,screenw=1024,screenh=576):
+		self.ucounter = 0
 		self.WIDTH=width
 		self.HEIGHT=height
 		self.SCREENW=screenw
@@ -194,7 +213,7 @@ class Space:
 		self.ATOMRADIUS = 10
 		self.BOND_KOEFF = 0.2
 		self.BONDR = 4
-		self.ATTRACT_KOEFF= 1
+		self.ATTRACT_KOEFF= 0.2
 		self.ATTRACTR = 5*self.ATOMRADIUS
 		self.ROTA_KOEFF = 0.00005
 		self.DETRACT1 = -3
@@ -265,11 +284,14 @@ class Space:
 		#options_menu = tk.Menu(self.menu_bar, tearoff=False)
 		examples_menu = tk.Menu(self.menu_bar, tearoff=False)
 		self.create_json_menu(examples_menu,"examples/")
-		
+		view_menu = tk.Menu(self.menu_bar, tearoff=False)
+		view_menu.add_command(label="View field", accelerator="f",command=self.draw_field)
 		self.menu_bar.add_cascade(label="File", menu=file_menu)
 		self.menu_bar.add_cascade(label="Simulation", menu=sim_menu)
 		self.menu_bar.add_cascade(label="Add", menu=add_menu)
+		self.menu_bar.add_cascade(label="View", menu=view_menu)
 		self.menu_bar.add_command(label="Options", command=self.options_window)
+		
 		self.menu_bar.add_cascade(label="Examples", menu=examples_menu)
 		#self.menu_bar.add_command(label="About", command=self.about_window)
 
@@ -370,6 +392,8 @@ class Space:
 			self.update_canvas()
 		if keysym=='r':		
 			self.reset()
+		if keysym=='f':		
+			self.draw_field()
 		if self.adding_mode:
 			self.status_bar.set("Adding element "+ str(self.createtype))
 			self.numpy2atoms()
@@ -659,8 +683,9 @@ class Space:
 		self.status_bar.set("Reset to previos loaded")
 	
 
-	def update_canvas(self):
-		self.canvas.delete("all")
+	def update_canvas(self,noclear=False):
+		if not noclear:
+			self.canvas.delete("all")
 		N = len(self.atoms)
 		for i in range(0,N):
 			atom_i = self.atoms[i]
@@ -671,7 +696,13 @@ class Space:
 				if n.bonded:
 					n.canvas_id = self.canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=atom_i.BONDEDCOLOR,fill=atom_i.BONDEDCOLOR)
 				else:
-					n.canvas_id = self.canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=atom_i.UNBONDEDCOLOR,fill=atom_i.UNBONDEDCOLOR)
+					if n.q==1:
+						color = atom_i.UNBONDEDCOLOR
+					if n.q==0:
+						color = "red"
+					if n.q==2:
+						color = "blue"
+					n.canvas_id = self.canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=color,fill=color)
 			#self.canvas.create_text(self.np_x[i],self.np_y[i], text=str(i),fill="red",font="Verdana 6")
 			if self.show_q.get():
 				self.canvas.create_text(self.np_x[i],self.np_y[i], text=str(int(self.np_q[i])),fill="white" if atom_i.type!=4 else "black",font="Verdana 6")
@@ -680,7 +711,7 @@ class Space:
 		if self.merge_mode:
 			for a in self.merge_atoms:
 				a.draw(self.canvas)
-		self.canvas.update()
+		#self.canvas.update()
 
 
 
@@ -747,6 +778,49 @@ class Space:
 		if (not self.export):
 			self.exportf = open("output/" + self.export_file, "a")
 		self.exportf.write(self.make_export()+"\n")
+	
+	def draw_field(self):
+		#far field
+		return
+		self.sim_pause()
+		fimage = Image.new("RGB",(self.WIDTH,self.HEIGHT),(0,0,0))
+		N = len(self.atoms)
+		Ex = np.zeros(N)
+		Ey = np.zeros(N)
+		a = np.zeros(N)
+		E = np.zeros((self.WIDTH, self.HEIGHT))
+		print("Calculating...")
+		probe_x = np.arange(0,self.WIDTH)
+		probe_y = np.arange(0,self.HEIGHT)
+		delta_x = np.subtract.outer(probe_x, self.np_x)
+		delta_y = np.subtract.outer(probe_y, self.np_y)
+		r2 = delta_x*delta_x + delta_y*delta_y
+		r = np.sqrt(r2)
+		r_reciproc = np.reciprocal(r,where=r!=0)
+		a[r<self.np_r-self.DETRACT1] = (r_reciproc*self.DETRACT_KOEFF1)[r<self.np_r-self.DETRACT1]
+		a[r<self.np_r-self.DETRACT2] = (r_reciproc*self.DETRACT_KOEFF2)[r<self.np_r-self.DETRACT2]
+				#a[r<self.np_SUMRADIUS_D1] = (r_reciproc*self.DETRACT_KOEFF1)[r<self.np_SUMRADIUS_D1]
+				#a[r<self.np_SUMRADIUS_D2] = (r_reciproc*self.DETRACT_KOEFF2)[r<self.np_SUMRADIUS_D2]
+#				if self.competitive.get():
+#						Q = np.outer(self.np_q, self.np_q)
+#						a += np.divide(Q,r,where=r!=0)*self.ATTRACT_KOEFF
+				#np.fill_diagonal(a,0)
+		a_x = np.divide(delta_x,r,where=r!=0) *a
+		a_y = np.divide(delta_y,r,where=r!=0) *a
+		Ex = a_x.sum(axis=1)
+		Ey = a_y.sum(axis=1)
+		#		E[x][y] = Ex*Ex + Ey*Ey
+		print("max=",E.max())
+		print("min=",E.min())
+		E = E/E.max()*255
+		draw = ImageDraw.Draw(fimage)
+		for x in range(0,self.WIDTH):
+			for y in range(0, self.HEIGHT):
+				#draw.line((0, 0, 199, 199), fill="red", width=2)
+				draw.point((x,y),fill=(0,int(E[x][y]),0))
+		self.fphoto = ImageTk.PhotoImage(fimage)   #in self because PhotoImage garbage collected and wtf
+		self.canvas.create_image(0,0,anchor="nw",image=self.fphoto)
+		self.update_canvas(noclear=True)
 
 	def atoms2numpy(self):
 		N = len(self.atoms)
@@ -836,7 +910,7 @@ class Space:
 		self.atoms2numpy()
 		self.root.after(self.timer,self.mainloop)
 		self.root.mainloop()
-	
+
 	def mainloop(self):
 			K = 1
 			N = len(self.atoms)
