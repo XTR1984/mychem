@@ -9,6 +9,7 @@ import random
 import os
 import json
 from json import encoder
+from turtle import dot
 import numpy as np
 #encoder.FLOAT_REPR = lambda o: format(o, '.3f')
 
@@ -261,6 +262,12 @@ class Space:
 		self.resetdata = None
 		self.merge_atoms = []
 		self.merge_mixers = []
+		self.select_mode = False
+		self.select_x1 = 0
+		self.select_x2 = 0
+		self.select_y1 = 0
+		self.select_y2 = 0
+		self.select_bottomright = (0,0)
 		######## tkinter ########
 		self.root= tk.Tk()
 		self.gravity = tk.BooleanVar()
@@ -327,6 +334,7 @@ class Space:
 		self.root.bind("<Button-3>",self.handle_esc)
 		self.root.bind("<KeyPress>", self.handle_keypress2)
 		self.root.bind("<Motion>", self.handle_motion)
+		self.root.bind("<ButtonRelease>", self.handle_release)
 		self.root.bind("<MouseWheel>",self.handle_wheel)
 		self.frame = tk.Frame(self.root, bd=5, relief=tk.SUNKEN)
 		self.frame.pack()
@@ -518,6 +526,7 @@ class Space:
 			self.numpy2atoms()
 			#a= Atom(event.x,event.y, self.createtype)
 			self.appendatom(self.newatom)
+			#print(self.newatom.x)
 			self.createf = self.newatom.f
 			if self.newatom.type==100:
 				self.mixers.append(self.newatom)
@@ -528,24 +537,31 @@ class Space:
 		if not(self.moving_mode or self.adding_mode or self.merge_mode):
 			x, y = event.x, event.y
 			self.numpy2atoms()
+			hitted = False
 			for a in self.atoms:
 				bbox = self.canvas.bbox(a.canvas_id)
 				if bbox[0] <= x <= bbox[2] and bbox[1] <= y <= bbox[3]:
 					a.unbond()
 					self.atoms.remove(a)
-					self.atoms2numpy()
+					#self.atoms2numpy()
 					self.moving_offsetx = a.x-event.x
 					self.moving_offsety = a.y-event.y
 					self.newatom = a
 					self.moving_mode = True
 					self.status_bar.set("Let's move")
+					hitted = True
 					break
+			if not hitted:
+				self.select_mode = True
+				self.select_x1, self.select_y1 = event.x, event.y
+				self.select_x2, self.select_y2 = event.x, event.y
 			self.atoms2numpy()
 			self.update_canvas()
           #  	break
 		elif self.moving_mode:
 			self.drop_atom()
 		elif self.merge_mode:
+			self.numpy2atoms()
 			self.merge_mode=False
 			self.atoms.extend(self.merge_atoms)
 			self.mixers.extend(self.merge_mixers)
@@ -556,7 +572,7 @@ class Space:
 			self.update_canvas()
 			self.resetdata = self.make_export()
 			self.status_bar.set("Merge finished")
-	
+
 	def handle_motion(self,event=None):
 		if self.adding_mode or self.moving_mode:
 			(cx,cy) = self.getpointer()
@@ -577,7 +593,10 @@ class Space:
 			#self.atoms2numpy()
 			self.update_canvas()
 			return
-		x, y = event.x, event.y
+		x, y = event.x, event.y			
+		if self.select_mode:
+			self.select_x2 = x
+			self.select_y2 = y
 #		self.numpy2atoms()
 		for a in self.atoms:
 			bbox = self.canvas.bbox(a.canvas_id)
@@ -587,8 +606,33 @@ class Space:
 				for n in a.nodes:
 					info+=" " + str(n.q)
 				self.status_bar.set(info)
+		if self.pause:
+			self.update_canvas()							
 		
-	
+	def handle_release(self,event=None):
+		if self.select_mode:
+			if self.select_x2 < self.select_x1:
+				(self.select_x1, self.select_x2) = (self.select_x2, self.select_x1)
+			if self.select_y2 < self.select_y1:
+				(self.select_y1, self.select_y2) = (self.select_y2, self.select_y1)
+			self.select_mode = False
+			self.numpy2atoms()
+			newatoms = []
+			for a in self.atoms:
+				if self.select_x1 <= a.x <= self.select_x2 and self.select_y1 <= a.y <= self.select_y2:
+					a.unbond()
+					self.merge_atoms.append(a)
+				else:
+					newatoms.append(a)
+			self.atoms = newatoms
+			if len(self.merge_atoms)>0:
+				self.status_bar.set("Selected: "+str(len(self.merge_atoms)))
+				self.atoms2numpy()
+				self.merge_mode = True
+				self.merge_offsetx = event.x
+				self.merge_offsety = event.y
+			self.update_canvas()
+
 	def handle_wheel(self,event=None):
 		if self.adding_mode or self.moving_mode:
 			if event.delta>0:
@@ -731,7 +775,9 @@ class Space:
 		if self.merge_mode:
 			for a in self.merge_atoms:
 				a.draw(self.canvas)
-		self.canvas.update()
+		if self.select_mode:
+			self.canvas.create_rectangle(self.select_x1,self.select_y1,self.select_x2,self.select_y2, outline="blue",dash=(5,1))
+		#self.canvas.update()
 
 
 
@@ -934,11 +980,11 @@ class Space:
 	def mainloop(self):
 			K = 1
 			N = len(self.atoms)
-			if N==0:
-				self.sim_pause()
 			if self.pause:
 				self.root.after(100,self.mainloop)
 				return
+			if N==0:
+				self.sim_pause()
 			self.t +=1
 			Ex=np.zeros(N)
 			Ey=np.zeros(N)
