@@ -35,6 +35,7 @@ class Node:
 	def __init__(self,parent):
 		self.f = 0
 		self.bonded = False
+		self.bonded2 = False
 		self.pair = None
 		self.canvas_id = None
 		self.parent = parent
@@ -46,19 +47,32 @@ class Node:
 		table=[5,1,4,6,3,2]
 		i1 = table.index(type1)
 		i2 = table.index(type2)
-		canbond = self.q+n.q == 2 
+		canbond = False
+		(n1,n2)=(None,None)
+		for ni in self.parent.nodes:
+			if canbond:
+				break
+			for nj in n.parent.nodes:
+				if not ni.bonded2 and not nj.bonded2 and (ni.q+nj.q == 2):
+					canbond = True
+					(n1,n2)=(ni,nj)
+					n1.bonded2 = True
+					n2.bonded2 = True
+					break
+				
 		shifttable = [ [(0,0), (0,1), (0,2) ],
 				       [(0,1), (0,2), (1,2) ], 
 				       [(0,2), (1,2), (2,2) ]]
 		shifttable2 = [ [(0,0), (0,1), (1,1) ],
 				       [(1,0), (1,1), (1,2) ], 
 				       [(1,1), (2,1), (2,2) ]]
-		if i1<i2:
-			(self.q, n.q) = shifttable[self.q][n.q]
-		if i1>i2:
-			(n.q, self.q) = shifttable[self.q][n.q]
-		if i1==i2:
-			(self.q, n.q) = shifttable2[self.q][n.q]
+		if canbond:
+			if i1<i2:
+				(n1.q, n2.q) = (0,2)
+			if i1>i2:
+				(n1.q, n2.q) = (2,0)
+			if i1==i2:
+				(n1.q, n2.q) = (1,1)
 		return canbond
 
 	def bond(self,n):
@@ -66,15 +80,21 @@ class Node:
 		if canbond:
 			n.pair = self
 			n.bonded = True
+			n.parent.bonded +=1
 			self.pair = n
 			self.bonded = True
+			self.parent.bonded +=1
 	
 	def unbond(self):
 		if self.bonded:
 			self.pair.pair = None
 			self.pair.bonded = False
+			self.pair.bonded2 = False
+			self.pair.parent.bonded-=1
 			self.pair = None
 			self.bonded = False
+			self.bonded2 = False
+			self.parent.bonded+=1
 
 class Atom:
 	id = 0
@@ -96,6 +116,7 @@ class Atom:
 		self.type = type
 		self.r = r
 		self.nodes = []
+		self.bonded = 0
 		self.fixed = fixed
 		self.near = []
 		self.MAXVELOCITY = 1
@@ -160,12 +181,7 @@ class Atom:
 			if n.bonded:
 				n.canvas_id = canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=self.BONDEDCOLOR,fill=self.BONDEDCOLOR)
 			else:
-				if n.q==1:
-					n.canvas_id = canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=self.UNBONDEDCOLOR,fill=self.UNBONDEDCOLOR)
-				if n.q==0:
-					n.canvas_id = canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline="red",fill="red")
-				if n.q==2:
-					n.canvas_id = canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline="blue",fill="blue")
+				n.canvas_id = canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=self.UNBONDEDCOLOR,fill=self.UNBONDEDCOLOR)
 
 	def limits(self):
 		if self.vx < -self.MAXVELOCITY: self.vx=-self.MAXVELOCITY
@@ -516,9 +532,6 @@ class Space:
 				bbox = self.canvas.bbox(a.canvas_id)
 				if bbox[0] <= x <= bbox[2] and bbox[1] <= y <= bbox[3]:
 					a.unbond()
-					#remove from nears
-					#for i in range(0,len(self.atoms)):
-#						for j in range(0,len(self.atom[i].near)):
 					self.atoms.remove(a)
 					self.atoms2numpy()
 					self.moving_offsetx = a.x-event.x
@@ -552,6 +565,7 @@ class Space:
 			if self.pause:
 				#self.atoms2numpy()
 				self.update_canvas()
+			return
 		if self.merge_mode:
 			(cx,cy) = self.getpointer()
 			for a in self.merge_atoms:
@@ -562,6 +576,18 @@ class Space:
 			self.changed=True
 			#self.atoms2numpy()
 			self.update_canvas()
+			return
+		x, y = event.x, event.y
+#		self.numpy2atoms()
+		for a in self.atoms:
+			bbox = self.canvas.bbox(a.canvas_id)
+			if bbox[0] <= x <= bbox[2] and bbox[1] <= y <= bbox[3]:
+				info = "Type=" + str(a.type)
+				info += " bond state:"
+				for n in a.nodes:
+					info+=" " + str(n.q)
+				self.status_bar.set(info)
+		
 	
 	def handle_wheel(self,event=None):
 		if self.adding_mode or self.moving_mode:
@@ -696,13 +722,7 @@ class Space:
 				if n.bonded:
 					n.canvas_id = self.canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=atom_i.BONDEDCOLOR,fill=atom_i.BONDEDCOLOR)
 				else:
-					if n.q==1:
-						color = atom_i.UNBONDEDCOLOR
-					if n.q==0:
-						color = "red"
-					if n.q==2:
-						color = "blue"
-					n.canvas_id = self.canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=color,fill=color)
+					n.canvas_id = self.canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=atom_i.UNBONDEDCOLOR,fill=atom_i.UNBONDEDCOLOR)
 			#self.canvas.create_text(self.np_x[i],self.np_y[i], text=str(i),fill="red",font="Verdana 6")
 			if self.show_q.get():
 				self.canvas.create_text(self.np_x[i],self.np_y[i], text=str(int(self.np_q[i])),fill="white" if atom_i.type!=4 else "black",font="Verdana 6")
@@ -711,7 +731,7 @@ class Space:
 		if self.merge_mode:
 			for a in self.merge_atoms:
 				a.draw(self.canvas)
-		#self.canvas.update()
+		self.canvas.update()
 
 
 
