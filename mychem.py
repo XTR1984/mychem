@@ -9,10 +9,12 @@ import random
 import os
 import json
 from json import encoder
+from turtle import dot
+import numpy as np
 #encoder.FLOAT_REPR = lambda o: format(o, '.3f')
 
 PI = 3.1415926535
-from PIL import ImageGrab
+from PIL import ImageGrab,ImageDraw,Image,ImageTk
 
 
 #grabbed from https://stackoverflow.com/a/71600967
@@ -34,22 +36,66 @@ class Node:
 	def __init__(self,parent):
 		self.f = 0
 		self.bonded = False
+		self.bonded2 = False
 		self.pair = None
 		self.canvas_id = None
 		self.parent = parent
-		pass
-	def bond(self,n):
-		n.pair = self
-		n.bonded = True
-		self.pair = n
-		self.bonded = True
+		self.q = 1
+	def shift_q(self, n):
+		#PHCSNO
+		type1 = self.parent.type
+		type2 = n.parent.type
+		table=[5,1,4,6,3,2]
+		i1 = table.index(type1)
+		i2 = table.index(type2)
+		canbond = False
+		(n1,n2)=(None,None)
+		for ni in self.parent.nodes:
+			if canbond:
+				break
+			for nj in n.parent.nodes:
+				if not ni.bonded2 and not nj.bonded2 and (ni.q+nj.q == 2):
+					canbond = True
+					(n1,n2)=(ni,nj)
+					n1.bonded2 = True
+					n2.bonded2 = True
+					break
+				
+		shifttable = [ [(0,0), (0,1), (0,2) ],
+				       [(0,1), (0,2), (1,2) ], 
+				       [(0,2), (1,2), (2,2) ]]
+		shifttable2 = [ [(0,0), (0,1), (1,1) ],
+				       [(1,0), (1,1), (1,2) ], 
+				       [(1,1), (2,1), (2,2) ]]
+		if canbond:
+			if i1<i2:
+				(n1.q, n2.q) = (0,2)
+			if i1>i2:
+				(n1.q, n2.q) = (2,0)
+			if i1==i2:
+				(n1.q, n2.q) = (1,1)
+		return canbond
 
+	def bond(self,n):
+		canbond = self.shift_q(n)
+		if canbond:
+			n.pair = self
+			n.bonded = True
+			n.parent.bonded +=1
+			self.pair = n
+			self.bonded = True
+			self.parent.bonded +=1
+	
 	def unbond(self):
 		if self.bonded:
 			self.pair.pair = None
 			self.pair.bonded = False
+			self.pair.bonded2 = False
+			self.pair.parent.bonded-=1
 			self.pair = None
 			self.bonded = False
+			self.bonded2 = False
+			self.parent.bonded+=1
 
 class Atom:
 	id = 0
@@ -71,6 +117,7 @@ class Atom:
 		self.type = type
 		self.r = r
 		self.nodes = []
+		self.bonded = 0
 		self.fixed = fixed
 		self.near = []
 		self.MAXVELOCITY = 1
@@ -113,16 +160,20 @@ class Atom:
 	def calculate_q(self):
 		q = 0
 		for n in self.nodes:
-			if n.bonded:
-				if self.type > n.pair.parent.type:
-					q +=1
-				if self.type < n.pair.parent.type:
-					q -=1
+			if n.q==0:
+				q+=1
+			if n.q==2:
+				q-=1
 		return q
 			
 	def unbond(self):
 		for n in self.nodes:
-			n.unbond()
+			if n.bonded:
+				p = n.pair.parent
+				n.unbond()
+				p.calculate_q()	
+		self.calculate_q()
+
 	def draw(self,canvas):
 		self.canvas_id = canvas.create_oval(self.x-self.r,self.y-self.r,self.x+self.r,self.y+self.r,outline=self.color,fill=self.color)
 		for n in self.nodes:
@@ -132,8 +183,6 @@ class Atom:
 				n.canvas_id = canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=self.BONDEDCOLOR,fill=self.BONDEDCOLOR)
 			else:
 				n.canvas_id = canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=self.UNBONDEDCOLOR,fill=self.UNBONDEDCOLOR)
-
-
 
 	def limits(self):
 		if self.vx < -self.MAXVELOCITY: self.vx=-self.MAXVELOCITY
@@ -160,18 +209,20 @@ class Atom:
 
 	def next(self):
 		if not self.fixed:
-			self.vx = self.vx + self.ax
-			self.vy = self.vy + self.ay
-			self.vf = self.vf + self.af
-			self.x  = self.x+self.vx
-			self.y  = self.y+self.vy
-			self.f  = self.f+self.vf
+#			self.vx = self.vx + self.ax
+#			self.vy = self.vy + self.ay
+#			self.vf = self.vf + self.af
+#			self.x  = self.x+self.vx
+#			self.y  = self.y+self.vy
+#			self.f  = self.f+self.vf
+
 			self.limits()
 
 		
 
 class Space:
 	def __init__(self,width=1024,height=576,screenw=1024,screenh=576):
+		self.ucounter = 0
 		self.WIDTH=width
 		self.HEIGHT=height
 		self.SCREENW=screenw
@@ -179,13 +230,14 @@ class Space:
 		self.ATOMRADIUS = 10
 		self.BOND_KOEFF = 0.2
 		self.BONDR = 4
-		self.ATTRACT_KOEFF= 0.25
+		self.ATTRACT_KOEFF= 0.2
 		self.ATTRACTR = 5*self.ATOMRADIUS
 		self.ROTA_KOEFF = 0.00005
 		self.DETRACT1 = -3
 		self.DETRACT_KOEFF1 = 15
-		self.DETRACT2 = 5
-		self.DETRACT_KOEFF2= 5
+		self.DETRACT2 = 3
+		self.DETRACT_KOEFF2= 4
+		self.MAXVELOCITY = 1
 		self.t = -1
 		self.atoms = []	
 		self.mixers = []
@@ -200,12 +252,6 @@ class Space:
 		self.createtype=4
 		self.createf = 0
 		self.standard = True
-		self.root= tk.Tk()
-		self.gravity = tk.BooleanVar()
-		self.competitive = tk.BooleanVar()
-		self.competitive.set(True)
-		self.bondlock = tk.BooleanVar()
-		self.bondlock.set(False)
 		self.adding_mode = False
 		self.moving_mode = False
 		self.changed = False
@@ -216,6 +262,22 @@ class Space:
 		self.resetdata = None
 		self.merge_atoms = []
 		self.merge_mixers = []
+		self.select_mode = False
+		self.select_x1 = 0
+		self.select_x2 = 0
+		self.select_y1 = 0
+		self.select_y2 = 0
+		self.select_bottomright = (0,0)
+		######## tkinter ########
+		self.root= tk.Tk()
+		self.gravity = tk.BooleanVar()
+		self.competitive = tk.BooleanVar()
+		self.competitive.set(True)
+		self.bondlock = tk.BooleanVar()
+		self.bondlock.set(False)
+		self.update_delta= tk.IntVar(value=5)
+		self.show_q = tk.BooleanVar()
+		self.show_q.set(True)
 		self.root.title("Mychem")
 		self.root.resizable(0, 0)
 		self.menu_bar = tk.Menu(self.root)
@@ -242,18 +304,21 @@ class Space:
 		add_menu.add_command(label="Mixer", accelerator="0",command=lambda:self.handle_keypress(keysym="0"))
 		add_menu.add_command(label="Delete", accelerator="Delete",command=self.handle_del)
 		add_menu.add_command(label="Cancel", accelerator="Esc",command=self.handle_esc)
+		#options_menu = tk.Menu(self.menu_bar, tearoff=False)
 		examples_menu = tk.Menu(self.menu_bar, tearoff=False)
 		self.create_json_menu(examples_menu,"examples/")
-
-
+		view_menu = tk.Menu(self.menu_bar, tearoff=False)
+		view_menu.add_command(label="View field", accelerator="f",command=self.draw_field)
 		self.menu_bar.add_cascade(label="File", menu=file_menu)
 		self.menu_bar.add_cascade(label="Simulation", menu=sim_menu)
 		self.menu_bar.add_cascade(label="Add", menu=add_menu)
+		self.menu_bar.add_cascade(label="View", menu=view_menu)
+		self.menu_bar.add_command(label="Options", command=self.options_window)
+		
 		self.menu_bar.add_cascade(label="Examples", menu=examples_menu)
-
+		#self.menu_bar.add_command(label="About", command=self.about_window)
 
 		self.root.config(menu=self.menu_bar)
-		
 		self.root.bind("<space>", self.handle_space)
 		self.root.bind("<Escape>", self.handle_esc)
 		self.root.bind("<Delete>", self.handle_del)
@@ -269,6 +334,7 @@ class Space:
 		self.root.bind("<Button-3>",self.handle_esc)
 		self.root.bind("<KeyPress>", self.handle_keypress2)
 		self.root.bind("<Motion>", self.handle_motion)
+		self.root.bind("<ButtonRelease>", self.handle_release)
 		self.root.bind("<MouseWheel>",self.handle_wheel)
 		self.frame = tk.Frame(self.root, bd=5, relief=tk.SUNKEN)
 		self.frame.pack()
@@ -294,6 +360,21 @@ class Space:
 				files_last.append((filename,filepath))
 		for (f,p) in files_last:				
 			menu.add_command(label=f, command=lambda p2=p: self.file_merge(path=p2))
+	
+
+	def options_window(self):
+		o = OptionsFrame(self)
+		
+	def about_window(self):
+		
+		a = tk.Toplevel()
+		a.geometry('200x150')
+		a['bg'] = 'grey'
+		a.overrideredirect(True)
+		tk.Label(a, text="About this")\
+        	.pack(expand=1)
+		a.after(5000, lambda: a.destroy())
+
 
 	def getpointer(self):
 				x = self.root.winfo_pointerx() - self.canvas.winfo_rootx()
@@ -330,11 +411,18 @@ class Space:
 		if keysym=='0':
 			self.createtype=100
 			self.adding_mode = True
-		if keysym=='r':			
+		if keysym=='q':			
+			self.show_q.set(not self.show_q.get())
+			self.update_canvas()
+		if keysym=='r':		
 			self.reset()
+		if keysym=='f':		
+			self.draw_field()
 		if self.adding_mode:
 			self.status_bar.set("Adding element "+ str(self.createtype))
+			self.numpy2atoms()
 			self.make_newatom()
+			self.atoms2numpy()
 			self.update_canvas()
 		#print(event.keysym)
 
@@ -353,7 +441,7 @@ class Space:
 	
 	def handle_del(self,event=None):
 		if self.moving_mode:
-			self.atoms.remove(self.newatom)
+			#self.atoms.remove(self.newatom)
 			self.newatom=None
 			self.moving_mode = False
 			self.status_bar.set("Deleted")
@@ -402,11 +490,14 @@ class Space:
 
 	def drop_atom(self):
 		#self.appendatom(self.newatom)
+		self.numpy2atoms()
 		self.newatom.vx=0
 		self.newatom.vy=0
+		self.appendatom(self.newatom)
 		self.newatom=None
 		self.moving_mode = False
 		self.status_bar.set("Dropped")
+		self.atoms2numpy()
 		self.update_canvas()
 
 
@@ -432,52 +523,65 @@ class Space:
 
 	def handle_button1(self, event):
 		if self.adding_mode and not self.moving_mode:
+			self.numpy2atoms()
 			#a= Atom(event.x,event.y, self.createtype)
 			self.appendatom(self.newatom)
+			#print(self.newatom.x)
 			self.createf = self.newatom.f
 			if self.newatom.type==100:
 				self.mixers.append(self.newatom)
 				self.status_bar.set("New mixer!")
 			self.make_newatom()
+			self.atoms2numpy()
 			self.update_canvas()
 		if not(self.moving_mode or self.adding_mode or self.merge_mode):
 			x, y = event.x, event.y
+			self.numpy2atoms()
+			hitted = False
 			for a in self.atoms:
 				bbox = self.canvas.bbox(a.canvas_id)
 				if bbox[0] <= x <= bbox[2] and bbox[1] <= y <= bbox[3]:
 					a.unbond()
-					#remove from nears
-					#for i in range(0,len(self.atoms)):
-#						for j in range(0,len(self.atom[i].near)):
-					#self.atoms.remove(a)
+					self.atoms.remove(a)
+					#self.atoms2numpy()
 					self.moving_offsetx = a.x-event.x
 					self.moving_offsety = a.y-event.y
 					self.newatom = a
 					self.moving_mode = True
 					self.status_bar.set("Let's move")
+					hitted = True
 					break
+			if not hitted:
+				self.select_mode = True
+				self.select_x1, self.select_y1 = event.x, event.y
+				self.select_x2, self.select_y2 = event.x, event.y
+			self.atoms2numpy()
 			self.update_canvas()
           #  	break
 		elif self.moving_mode:
 			self.drop_atom()
 		elif self.merge_mode:
+			self.numpy2atoms()
 			self.merge_mode=False
 			self.atoms.extend(self.merge_atoms)
 			self.mixers.extend(self.merge_mixers)
 			self.merge_atoms = []
 			self.merge_mixers = []
 			self.canvas.configure(cursor="tcross")
+			self.atoms2numpy()
 			self.update_canvas()
 			self.resetdata = self.make_export()
 			self.status_bar.set("Merge finished")
-	
+
 	def handle_motion(self,event=None):
 		if self.adding_mode or self.moving_mode:
 			(cx,cy) = self.getpointer()
 			self.newatom.x=cx+self.moving_offsetx
 			self.newatom.y=cy+self.moving_offsety
 			if self.pause:
+				#self.atoms2numpy()
 				self.update_canvas()
+			return
 		if self.merge_mode:
 			(cx,cy) = self.getpointer()
 			for a in self.merge_atoms:
@@ -486,8 +590,49 @@ class Space:
 			self.merge_offsetx = cx
 			self.merge_offsety = cy
 			self.changed=True
+			#self.atoms2numpy()
 			self.update_canvas()
-	
+			return
+		x, y = event.x, event.y			
+		if self.select_mode:
+			self.select_x2 = x
+			self.select_y2 = y
+#		self.numpy2atoms()
+		for a in self.atoms:
+			bbox = self.canvas.bbox(a.canvas_id)
+			if bbox[0] <= x <= bbox[2] and bbox[1] <= y <= bbox[3]:
+				info = "Type=" + str(a.type)
+				info += " bond state:"
+				for n in a.nodes:
+					info+=" " + str(n.q)
+				self.status_bar.set(info)
+		if self.pause:
+			self.update_canvas()							
+		
+	def handle_release(self,event=None):
+		if self.select_mode:
+			if self.select_x2 < self.select_x1:
+				(self.select_x1, self.select_x2) = (self.select_x2, self.select_x1)
+			if self.select_y2 < self.select_y1:
+				(self.select_y1, self.select_y2) = (self.select_y2, self.select_y1)
+			self.select_mode = False
+			self.numpy2atoms()
+			newatoms = []
+			for a in self.atoms:
+				if self.select_x1 <= a.x <= self.select_x2 and self.select_y1 <= a.y <= self.select_y2:
+					a.unbond()
+					self.merge_atoms.append(a)
+				else:
+					newatoms.append(a)
+			self.atoms = newatoms
+			if len(self.merge_atoms)>0:
+				self.status_bar.set("Selected: "+str(len(self.merge_atoms)))
+				self.atoms2numpy()
+				self.merge_mode = True
+				self.merge_offsetx = event.x
+				self.merge_offsety = event.y
+			self.update_canvas()
+
 	def handle_wheel(self,event=None):
 		if self.adding_mode or self.moving_mode:
 			if event.delta>0:
@@ -520,6 +665,7 @@ class Space:
 		self.pause=True
 		self.atoms = []	
 		self.mixers = []
+		self.atoms2numpy()
 		self.canvas.delete("all")
 		self.status_bar.set("New file")
 
@@ -552,6 +698,7 @@ class Space:
 				self.appendatom(aa)
 				if type == 100:
 					self.mixers.append(aa)
+		self.atoms2numpy()					
 		self.update_canvas()
 
 
@@ -606,19 +753,31 @@ class Space:
 		self.status_bar.set("Reset to previos loaded")
 	
 
-
-
-	def update_canvas(self):
-		self.canvas.delete("all")
-		for a in self.atoms:
-			a.draw(self.canvas)
-
+	def update_canvas(self,noclear=False):
+		if not noclear:
+			self.canvas.delete("all")
+		N = len(self.atoms)
+		for i in range(0,N):
+			atom_i = self.atoms[i]
+			atom_i.canvas_id = self.canvas.create_oval(self.np_x[i]-atom_i.r,self.np_y[i]-atom_i.r,self.np_x[i]+atom_i.r,self.np_y[i]+atom_i.r,outline=atom_i.color,fill=atom_i.color)
+			for n in atom_i.nodes:
+				nx = self.np_x[i] + cos(n.f+self.np_f[i])*atom_i.r
+				ny = self.np_y[i] - sin(n.f+self.np_f[i])*atom_i.r
+				if n.bonded:
+					n.canvas_id = self.canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=atom_i.BONDEDCOLOR,fill=atom_i.BONDEDCOLOR)
+				else:
+					n.canvas_id = self.canvas.create_oval(nx-1,ny-1,nx+1,ny+1,outline=atom_i.UNBONDEDCOLOR,fill=atom_i.UNBONDEDCOLOR)
+			#self.canvas.create_text(self.np_x[i],self.np_y[i], text=str(i),fill="red",font="Verdana 6")
+			if self.show_q.get():
+				self.canvas.create_text(self.np_x[i],self.np_y[i], text=str(int(self.np_q[i])),fill="white" if atom_i.type!=4 else "black",font="Verdana 6")
 		if self.adding_mode or self.moving_mode:
 			self.newatom.draw(self.canvas)
 		if self.merge_mode:
 			for a in self.merge_atoms:
 				a.draw(self.canvas)
-		self.canvas.update()
+		if self.select_mode:
+			self.canvas.create_rectangle(self.select_x1,self.select_y1,self.select_x2,self.select_y2, outline="blue",dash=(5,1))
+		#self.canvas.update()
 
 
 
@@ -635,17 +794,20 @@ class Space:
 
 
 	def sim_run(self):
+		self.atoms2numpy()
 		self.pause = False
 		self.status_bar.set("Running")
 
 	def sim_pause(self):
+		self.numpy2atoms()
 		self.pause = True
+		self.status_bar.settime(self.t)
+		self.status_bar.setinfo("Number of atoms: "+str(len(self.atoms)))
 		self.status_bar.set("Paused")
 
 	def appendatom(self,a):
 		a.space = self
 		self.atoms.append(a)
-		#a.draw(self)
 
 	def appendmixer(self,n=1):
 		for i in range(0,n):
@@ -662,7 +824,6 @@ class Space:
 		frame = {}
 		frame["time"] = self.t
 		frame["atoms"] = []
-		#frame["mixers"] = []
 		N = len(self.atoms)
 		for i in range(0,N):
 			atom = {}
@@ -683,24 +844,190 @@ class Space:
 		if (not self.export):
 			self.exportf = open("output/" + self.export_file, "a")
 		self.exportf.write(self.make_export()+"\n")
+	
+	def draw_field(self):
+		#far field
+		return
+		self.sim_pause()
+		fimage = Image.new("RGB",(self.WIDTH,self.HEIGHT),(0,0,0))
+		N = len(self.atoms)
+		Ex = np.zeros(N)
+		Ey = np.zeros(N)
+		a = np.zeros(N)
+		E = np.zeros((self.WIDTH, self.HEIGHT))
+		print("Calculating...")
+		probe_x = np.arange(0,self.WIDTH)
+		probe_y = np.arange(0,self.HEIGHT)
+		delta_x = np.subtract.outer(probe_x, self.np_x)
+		delta_y = np.subtract.outer(probe_y, self.np_y)
+		r2 = delta_x*delta_x + delta_y*delta_y
+		r = np.sqrt(r2)
+		r_reciproc = np.reciprocal(r,where=r!=0)
+		a[r<self.np_r-self.DETRACT1] = (r_reciproc*self.DETRACT_KOEFF1)[r<self.np_r-self.DETRACT1]
+		a[r<self.np_r-self.DETRACT2] = (r_reciproc*self.DETRACT_KOEFF2)[r<self.np_r-self.DETRACT2]
+				#a[r<self.np_SUMRADIUS_D1] = (r_reciproc*self.DETRACT_KOEFF1)[r<self.np_SUMRADIUS_D1]
+				#a[r<self.np_SUMRADIUS_D2] = (r_reciproc*self.DETRACT_KOEFF2)[r<self.np_SUMRADIUS_D2]
+#				if self.competitive.get():
+#						Q = np.outer(self.np_q, self.np_q)
+#						a += np.divide(Q,r,where=r!=0)*self.ATTRACT_KOEFF
+				#np.fill_diagonal(a,0)
+		a_x = np.divide(delta_x,r,where=r!=0) *a
+		a_y = np.divide(delta_y,r,where=r!=0) *a
+		Ex = a_x.sum(axis=1)
+		Ey = a_y.sum(axis=1)
+		#		E[x][y] = Ex*Ex + Ey*Ey
+		print("max=",E.max())
+		print("min=",E.min())
+		E = E/E.max()*255
+		draw = ImageDraw.Draw(fimage)
+		for x in range(0,self.WIDTH):
+			for y in range(0, self.HEIGHT):
+				#draw.line((0, 0, 199, 199), fill="red", width=2)
+				draw.point((x,y),fill=(0,int(E[x][y]),0))
+		self.fphoto = ImageTk.PhotoImage(fimage)   #in self because PhotoImage garbage collected and wtf
+		self.canvas.create_image(0,0,anchor="nw",image=self.fphoto)
+		self.update_canvas(noclear=True)
 
-		#			j = 
-	
+	def atoms2numpy(self):
+		N = len(self.atoms)
+		self.np_r = np.empty((N))
+		self.np_x = np.empty((N))
+		self.np_y = np.empty((N))
+		self.np_vx =np.empty((N))
+		self.np_vy = np.empty((N))
+		self.np_ax = np.empty((N))
+		self.np_ay = np.empty((N))
+		self.np_f = np.empty((N))
+		self.np_vf = np.empty((N))
+		self.np_type = np.empty((N))
+		self.np_m = np.empty((N))
+		self.np_q = np.empty((N))
+
+		for i in range(0,N):
+			atom_i = self.atoms[i]
+			self.np_r[i]=atom_i.r
+			self.np_m[i]=atom_i.m
+			self.np_x[i]=atom_i.x
+			self.np_y[i]=atom_i.y
+			self.np_vx[i]=atom_i.vx
+			self.np_vy[i]=atom_i.vy
+			self.np_ax[i]=atom_i.ax
+			self.np_ay[i]=atom_i.ay
+			self.np_f[i]=atom_i.f
+			self.np_vf[i]=atom_i.vf
+			self.np_q[i]=atom_i.q
+			self.np_type[i]=atom_i.type
+		self.np_SUMRADIUS = np.add.outer(self.np_r,self.np_r)
+		self.np_SUMRADIUS_D1 = self.np_SUMRADIUS + self.DETRACT1
+		self.np_SUMRADIUS_D2 = self.np_SUMRADIUS + self.DETRACT2
+
+	def numpy2atoms(self):
+		N = len(self.atoms)
+		for i in range(0,N):
+			atom_i = self.atoms[i]
+			atom_i.x=self.np_x[i]
+			atom_i.y=self.np_y[i]
+			atom_i.vx=self.np_vx[i]
+			atom_i.vy=self.np_vy[i]
+			atom_i.ax=self.np_ax[i]
+			atom_i.ay=self.np_ay[i]
+			atom_i.f=self.np_f[i]
+			atom_i.q=self.np_q[i]
+
+	def np_next(self):
+			self.np_vx *=0.9999
+			self.np_vy *=0.9999
+			self.np_vf *=0.99
+			self.np_vx += self.np_ax
+			self.np_vy += self.np_ay
+			self.np_x += self.np_vx
+			self.np_y += self.np_vy
+			self.np_f += self.np_vf
+
+
+	def np_limits(self): 
+		self.np_vx[self.np_vx< -self.MAXVELOCITY] = -self.MAXVELOCITY
+		self.np_vx[self.np_vx> self.MAXVELOCITY] = self.MAXVELOCITY
+		self.np_vy[self.np_vy< -self.MAXVELOCITY] = -self.MAXVELOCITY
+		self.np_vy[self.np_vy> self.MAXVELOCITY] = self.MAXVELOCITY
+		self.np_f[self.np_f> 2*PI] -=2*PI
+		self.np_f[self.np_f< 0] += 2*PI
+
+		b = self.np_x< self.np_r
+		self.np_x[b] = self.np_r[b]
+		self.np_vx[b] = - self.np_vx[b]
+
+		b = self.np_y < self.np_r
+		self.np_y[b] = self.np_r[b]
+		self.np_vy[b] = - self.np_vy[b]
+		
+		b = self.np_x > self.WIDTH-self.np_r
+		self.np_x[b] = (self.WIDTH-self.np_r)[b]
+		self.np_vx[b] = - self.np_vx[b]
+
+		b = self.np_y > self.HEIGHT-self.np_r
+		self.np_y[b] = (self.HEIGHT-self.np_r)[b]
+		self.np_vy[b] = - self.np_vy[b]
+
 	def go(self):	
+		self.timer = 1
+		#self.stoptime = 1000
 		self.resetdata = self.make_export()
-		self.root.after(1,self.mainloop)
+		self.atoms2numpy()
+		self.root.after(self.timer,self.mainloop)
 		self.root.mainloop()
-	
+
 	def mainloop(self):
 			K = 1
+			N = len(self.atoms)
 			if self.pause:
 				self.root.after(100,self.mainloop)
 				return
-			N = len(self.atoms)
 			if N==0:
 				self.sim_pause()
 			self.t +=1
+			Ex=np.zeros(N)
+			Ey=np.zeros(N)
+			a = np.zeros((N,N))
+			#ones = np.ones((N,N)
+#				if self.t%30==0 or self.changed==True:
+#					for j in range(0,N):
+#						atom_j = self.atoms[j]
+#						a=0	
+#						if i==j: continue
+#			
+#						delta_x = atom_i.x-atom_j.x
+#						delta_y = atom_i.y-atom_j.y
+#						r2 = delta_x*delta_x + delta_y*delta_y
+#						r = sqrt(r2)
+#						if r<self.ATOMRADIUS*8 and not atom_j in atom_i.near:
+#							atom_i.near.append(atom_j)
+#						if r>=self.ATOMRADIUS*8: 
+#							try:
+#								atom_i.near.remove(atom_j)
+#							except:
+#								pass
+#
+#				for atom_j in atom_i.near:
+#					a=0	
+			debug = False
+			delta_x = np.subtract.outer(self.np_x, self.np_x)
+			delta_y = np.subtract.outer(self.np_y, self.np_y)
+			r2 = delta_x*delta_x + delta_y*delta_y
+			r = np.sqrt(r2)
+			r_reciproc = np.reciprocal(r,where=r!=0)
+			a[r<self.np_SUMRADIUS_D1] = (r_reciproc*self.DETRACT_KOEFF1)[r<self.np_SUMRADIUS_D1]
+			a[r<self.np_SUMRADIUS_D2] = (r_reciproc*self.DETRACT_KOEFF2)[r<self.np_SUMRADIUS_D2]
+			if self.competitive.get():
+						Q = np.outer(self.np_q, self.np_q)
+						a += np.divide(Q,r,where=r!=0)*self.ATTRACT_KOEFF
+			np.fill_diagonal(a,0)
+			a_x = np.divide(delta_x,r,where=r!=0) *a
+			a_y = np.divide(delta_y,r,where=r!=0) *a
+			Ex = a_x.sum(axis=1)
+			Ey = a_y.sum(axis=1)
 			for i in range(0,N):
+<<<<<<< HEAD
 				atom_i = self.atoms[i]
 				Ex=0
 				Ey=0
@@ -795,19 +1122,70 @@ class Space:
 				atom_i.ay= K*Ey/atom_i.m				
 				if self.gravity.get():
 					atom_i.ay +=self.g
+=======
+				naf = 0
+				jj = np.where(np.logical_and(r[i]>0,r[i]<40))
+				
+				#print("jj=", jj)
+				allnEx = 0
+				allnEy = 0
+				for j in jj[0].tolist():
+					if j==i: continue
+					atom_i = self.atoms[i]
+					atom_j = self.atoms[j]
+					for n1 in atom_i.nodes:
+						n1x = self.np_x[i] + cos(n1.f+self.np_f[i])*atom_i.r
+						n1y = self.np_y[i] - sin(n1.f+self.np_f[i])*atom_i.r
 
+						nEx = 0
+						nEy = 0
+						naf = 0
+						for n2 in atom_j.nodes:
+							n2x = self.np_x[j] + cos(n2.f+self.np_f[j])*atom_j.r
+							n2y = self.np_y[j] - sin(n2.f+self.np_f[j])*atom_j.r
+							delta_x = n1x-n2x
+							delta_y = n1y-n2y
+							r2n = delta_x*delta_x + delta_y*delta_y
+							rn = sqrt(r2n) 
+							if rn==0: continue
+							a = 0
+							if rn<self.BONDR and not n1.bonded and not n2.bonded:
+								n1.bond(n2)
+								self.np_q[i] = atom_i.calculate_q()
+								self.np_q[j] = atom_j.calculate_q()
+							if rn>self.BONDR and n1.pair == n2:
+								if not self.bondlock.get():
+									n1.unbond()
+									self.np_q[i] = atom_i.calculate_q()
+									self.np_q[j] = atom_j.calculate_q()
+							if n1.pair == n2:
+								if (rn>0): 
+									a = -r2n*self.BOND_KOEFF
+									naf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+self.np_f[i])*atom_i.r * delta_y + delta_x*sin(n1.f+self.np_f[i])*atom_i.r)
+							if not n1.bonded and not n2.bonded:
+								naf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+self.np_f[i])*atom_i.r * delta_y + delta_x*sin(n1.f+self.np_f[i])*atom_i.r)									
+
+							nEx += delta_x/rn * a
+							nEy += delta_y/rn * a
+
+						allnEx = allnEx + nEx
+						allnEy = allnEy + nEy
+						self.np_vf[i] += naf
+
+				Ex[i] += allnEx
+				Ey[i] += allnEy
+			self.np_ax= K*Ex/self.np_m
+			self.np_ay= K*Ey/self.np_m
+			if self.gravity.get():
+				self.np_ay += self.g
+>>>>>>> numpy
+
+			#set mixers velocity		
 			if len(self.mixers)>0:
-				for m in self.mixers:
-#						m.vx*=1.1
-#						m.vy*=1.1
-					if m.vx>=0:
-						m.vx =1
-					if m.vx<0:	
-						m.vx = -1
-					if m.vy>=0:
-						m.vy =1
-					if m.vy<0:
-						m.vy = -1
+				self.np_vx[np.logical_and(self.np_type==100,self.np_vx>=0)] = 1
+				self.np_vx[np.logical_and(self.np_type==100,self.np_vx<0)] = -1
+				self.np_vy[np.logical_and(self.np_type==100,self.np_vy>=0)] = 1
+				self.np_vy[np.logical_and(self.np_type==100,self.np_vy<0)] = -1
 
 			if self.action:
 				self.action(self)
@@ -817,22 +1195,13 @@ class Space:
 				self.newatom.x=cx + self.moving_offsetx
 				self.newatom.y=cy + self.moving_offsety
 
+			self.np_next()
+			self.np_limits()
 
-			for i in range(0,N):
-				atom_i=self.atoms[i]
-				atom_i.vx *= 0.9999
-				atom_i.vy *= 0.9999
-				atom_i.vf *= 0.99
-				atom_i.calculate_q()
-				atom_i.next()
+			#update screen
+			if (self.t%self.update_delta.get()==0):
+				self.update_canvas()
 			
-			self.update_canvas()
-			
-			#  canvas.after(1)
-			#	if(time%1 ==0):  
-			#		for i in range(0,N):	
-
-
 			if self.recording:
 					save_widget_as_image(self.canvas,'output/'+str(self.t)+'.png')
 			if self.export:
@@ -841,19 +1210,16 @@ class Space:
 			if self.stoptime!= -1:
 				if self.t>self.stoptime:
 					self.sim_pause()
-			
-
 
 			if self.t%100 ==0:
 				self.status_bar.settime(self.t)
 				self.status_bar.setinfo("Number of atoms: "+str(N))
-			self.root.after(1,self.mainloop)
+			self.root.after(self.timer,self.mainloop)
   
-
 class StatusBar(tk.Frame):
-	def __init__(self, master):
-		super().__init__(master)
-		status_frame = tk.Frame(master, bd=1, relief=tk.SUNKEN)
+	def __init__(self, parent):
+		super().__init__(parent)
+		status_frame = tk.Frame(parent, bd=1, relief=tk.SUNKEN)
 		status_frame.pack(side=tk.BOTTOM, fill=tk.X)
 		self.label = tk.Label(status_frame, text= "Status")
 		self.label.pack(side=tk.LEFT)
@@ -862,8 +1228,6 @@ class StatusBar(tk.Frame):
 		self.info = tk.Label(status_frame, text="Info")
 		self.info.pack(side=tk.RIGHT)
 
-
-		
     
 	def set(self, text):
 		self.label.config(text=text)
@@ -873,15 +1237,35 @@ class StatusBar(tk.Frame):
 
 	def setinfo(self,info):
 		self.info.config(text=info)
-
     
 	def clear(self):
 		self.label.config(text='')
+
+class OptionsFrame():
+	def __init__(self,space):
+		self.space = space
+		a = tk.Toplevel()
+		a.title("Options")
+		a.resizable(0, 0)
+		#a.geometry('200x150')
+		self.frame = tk.Frame(a, bd=5, relief=tk.SUNKEN)
+		self.frame.pack()
+		label = tk.Label(self.frame, text= "Update delta").pack(side=tk.LEFT)
+		self.update_slider = tk.Scale(self.frame, from_=1, to=100, orient=tk.HORIZONTAL,variable=self.space.update_delta)
+		self.update_slider.pack()
+		checkbox = tk.Checkbutton(self.frame, text="Show Q", variable=self.space.show_q)
+		checkbox.pack(side=tk.LEFT)
+
+#	def set_update_delta(self,value):
+#		self.space.update_delta=value
+
+
 
 if __name__ == "__main__":
 	random.seed(1)
 	space = Space()
 	space.go()
+
 
 
 

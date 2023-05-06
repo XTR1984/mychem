@@ -3,8 +3,8 @@ Pseudochemical 2d sandbox
 - no acceleration
 - minimal features by now
 
-for use need to install Pillow with
-- python -m pip install pillow
+for use install Pillow and Numpy with
+- python -m pip install pillow numpy
 
 Some examples:
 
