@@ -249,7 +249,7 @@ class Space:
 		self.BOND_KOEFF = 0.2
 		self.BONDR = 4
 		self.ATTRACT_KOEFF= 0.1
-		self.ATTRACTR = 5*self.ATOMRADIUS
+		#self.ATTRACTR = 5*self.ATOMRADIUS
 		self.ROTA_KOEFF = 0.00005
 		self.DETRACT1 = -3
 		self.DETRACT_KOEFF1 = 15
@@ -597,16 +597,24 @@ class Space:
 			self.drop_atom()
 		elif self.merge_mode:
 			self.numpy2atoms()
-			self.merge_mode=False
 			self.atoms.extend(self.merge_atoms)
 			self.mixers.extend(self.merge_mixers)
-			self.merge_atoms = []
-			self.merge_mixers = []
-			self.canvas.configure(cursor="tcross")
+			#copy on merge with control key pressed
+			if not event.state & 0x4:
+				self.merge_mode=False
+				self.merge_atoms = []
+				self.canvas.configure(cursor="tcross")
+				self.status_bar.set("Merge finished")
+			else:
+				new_ma = []
+				for a in self.merge_atoms:
+					na = Atom(a.x,a.y,a.type,a.f,a.r,a.m,a.q)
+					new_ma.append(na)
+				self.merge_atoms = new_ma
 			self.atoms2numpy()
 			self.update_canvas()
 			self.resetdata = self.make_export()
-			self.status_bar.set("Merge finished")
+		
 
 	def handle_motion(self,event=None):
 		if self.adding_mode or self.moving_mode:
