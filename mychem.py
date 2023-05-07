@@ -277,6 +277,9 @@ class Space:
 		######## tkinter ########
 		self.root= tk.Tk()
 		self.gravity = tk.BooleanVar()
+		self.shake = tk.BooleanVar()
+		self.shake.set(False)
+		self.SHAKE_KOEFF = 1
 		self.competitive = tk.BooleanVar()
 		self.competitive.set(True)
 		self.bondlock = tk.BooleanVar()
@@ -292,7 +295,7 @@ class Space:
 		file_menu.add_command(label="Open", accelerator="o", command=self.file_open)
 		file_menu.add_command(label="Merge", accelerator="m", command=self.file_merge)
 		file_menu.add_command(label="Merge recent", accelerator="l", command=self.file_merge_recent)
-		file_menu.add_command(label="Save", accelerator="s", command=self.file_save)
+		file_menu.add_command(label="Save", accelerator="Alt+s", command=self.file_save)
 		file_menu.add_command(label="Exit", command=self.file_exit)
 		sim_menu = tk.Menu(self.menu_bar, tearoff=False)
 		sim_menu.add_command(label="Go/Pause", accelerator="Space",command=self.handle_space)
@@ -300,6 +303,7 @@ class Space:
 		sim_menu.add_checkbutton(label="Gravity", accelerator="g", variable=self.gravity,command=self.handle_g)
 		sim_menu.add_checkbutton(label="Competitive", accelerator="c", variable=self.competitive,command=self.handle_c)
 		sim_menu.add_checkbutton(label="Bond lock", accelerator="b", variable=self.bondlock,command=self.handle_bondlock)
+		sim_menu.add_checkbutton(label="Random shake", accelerator="s", variable=self.shake,command=self.handle_shake)
 		add_menu = tk.Menu(self.menu_bar, tearoff=False)
 		add_menu.add_command(label="H", accelerator="1",command=lambda:self.handle_keypress(keysym="1"))
 		add_menu.add_command(label="O", accelerator="2",command=lambda:self.handle_keypress(keysym="2"))
@@ -334,7 +338,8 @@ class Space:
 		self.root.bind("<m>", self.file_merge)
 		self.root.bind("<l>", self.file_merge_recent)
 		self.root.bind("<o>", self.file_open)
-		self.root.bind("<s>", self.file_save)
+		self.root.bind("<Alt-s>", self.file_save)
+		self.root.bind("<s>", self.handle_shake)
 		self.root.bind("<b>", self.handle_bondlock)
 		self.root.bind("<Button-1>",self.handle_button1)
 		self.root.bind("<Button-3>",self.handle_esc)
@@ -433,6 +438,9 @@ class Space:
 		#print(event.keysym)
 
 	def handle_esc(self,event=None):
+		if event and not self.merge_mode:
+			self.file_merge_recent()
+			return
 		if self.moving_mode:
 			self.drop_atom()
 		if self.adding_mode:
@@ -444,6 +452,7 @@ class Space:
 			self.merge_mode = False
 			self.canvas.configure(cursor="tcross")
 			self.update_canvas()
+			
 	
 	def handle_del(self,event=None):
 		if self.moving_mode:
@@ -515,16 +524,24 @@ class Space:
 			self.sim_pause()
 
 	def handle_g(self,event=None):
-		self.gravity.set(not self.gravity.get())
+		if event:
+			self.gravity.set(not self.gravity.get())
 		self.status_bar.set("Gravity is "+ OnOff(self.gravity.get()))
 
 	def handle_bondlock(self,event=None):
-		self.bondlock.set(not self.bondlock.get())
+		if event:
+			self.bondlock.set(not self.bondlock.get())
 		self.status_bar.set("Bondlock is "+ OnOff(self.bondlock.get()))
 
+	def handle_shake(self,event=None):
+		if event:
+			self.shake.set(not self.shake.get())
+		self.status_bar.set("Random shake is "+ OnOff(self.shake.get()))
 
-	def handle_c(self,event):
-		self.competitive.set(not self.competitive.get())
+
+	def handle_c(self,event=None):
+		if event:
+			self.competitive.set(not self.competitive.get())
 		self.status_bar.set("Competitive is "+ OnOff(self.competitive.get()))
 
 	def handle_button1(self, event):
@@ -1088,8 +1105,13 @@ class Space:
 				Ey[i] += allnEy
 			self.np_ax= K*Ex/self.np_m
 			self.np_ay= K*Ey/self.np_m
+
 			if self.gravity.get():
 				self.np_ay += self.g
+
+			if self.shake.get():
+				self.np_ax += self.SHAKE_KOEFF * (np.random.rand(N)-0.5)
+				self.np_ay += self.SHAKE_KOEFF * (np.random.rand(N)-0.5)
 
 			#set mixers velocity		
 			if len(self.mixers)>0:
@@ -1100,6 +1122,7 @@ class Space:
 
 			if self.action:
 				self.action(self)
+
 
 			if self.moving_mode:
 				(cx,cy) = self.getpointer()
