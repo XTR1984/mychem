@@ -90,10 +90,16 @@ class Node:
 		if self.bonded:
 			self.pair.pair = None
 			self.pair.bonded = False
-			self.pair.bonded2 = False
+			for n in self.pair.parent.nodes:
+				if n.bonded2:
+					n.bonded2 = False
 			self.pair.parent.bonded-=1
 			self.pair = None
 			self.bonded = False
+			for n in self.parent.nodes:
+				if n.bonded2:
+					n.bonded2 = False
+
 			self.bonded2 = False
 			self.parent.bonded+=1
 
@@ -230,7 +236,7 @@ class Space:
 		self.ATOMRADIUS = 10
 		self.BOND_KOEFF = 0.2
 		self.BONDR = 4
-		self.ATTRACT_KOEFF= 0.2
+		self.ATTRACT_KOEFF= 0.1
 		self.ATTRACTR = 5*self.ATOMRADIUS
 		self.ROTA_KOEFF = 0.00005
 		self.DETRACT1 = -3
@@ -282,7 +288,7 @@ class Space:
 		self.root.resizable(0, 0)
 		self.menu_bar = tk.Menu(self.root)
 		file_menu = tk.Menu(self.menu_bar, tearoff=False)
-		file_menu.add_command(label="New", accelerator="n", command=self.file_new)
+		file_menu.add_command(label="New", accelerator="Alt+n",command=self.file_new)
 		file_menu.add_command(label="Open", accelerator="o", command=self.file_open)
 		file_menu.add_command(label="Merge", accelerator="m", command=self.file_merge)
 		file_menu.add_command(label="Merge recent", accelerator="l", command=self.file_merge_recent)
@@ -324,7 +330,7 @@ class Space:
 		self.root.bind("<Delete>", self.handle_del)
 		self.root.bind("<g>", self.handle_g)
 		self.root.bind("<c>", self.handle_c)
-		self.root.bind("<n>", self.file_new)
+		self.root.bind("<Alt-n>", self.file_new)
 		self.root.bind("<m>", self.file_merge)
 		self.root.bind("<l>", self.file_merge_recent)
 		self.root.bind("<o>", self.file_open)
@@ -605,6 +611,8 @@ class Space:
 				info += " bond state:"
 				for n in a.nodes:
 					info+=" " + str(n.q)
+				for n in a.nodes:
+					info+=" " + str(n.bonded2)
 				self.status_bar.set(info)
 		if self.pause:
 			self.update_canvas()							
@@ -1027,102 +1035,6 @@ class Space:
 			Ex = a_x.sum(axis=1)
 			Ey = a_y.sum(axis=1)
 			for i in range(0,N):
-<<<<<<< HEAD
-				atom_i = self.atoms[i]
-				Ex=0
-				Ey=0
-				a = 0
-				if self.t%30==0 or self.changed==True:
-					for j in range(0,N):
-						atom_j = self.atoms[j]
-						a=0	
-						if i==j: continue
-			
-						delta_x = atom_i.x-atom_j.x
-						delta_y = atom_i.y-atom_j.y
-						r2 = delta_x*delta_x + delta_y*delta_y
-						r = sqrt(r2)
-						if r<self.ATOMRADIUS*8 and not atom_j in atom_i.near:
-							atom_i.near.append(atom_j)
-						if r>=self.ATOMRADIUS*8: 
-							try:
-								atom_i.near.remove(atom_j)
-							except:
-								pass
-
-				for atom_j in atom_i.near:
-					a=0	
-					delta_x = atom_i.x-atom_j.x
-					delta_y = atom_i.y-atom_j.y
-					r2 = delta_x*delta_x+ delta_y*delta_y
-					r = sqrt(r2)
-					SUMRADIUS = atom_i.r+atom_j.r
-					#AVGRADIUS = SUMRADIUS/2
-					if r2 == 0:
-						continue;
-
-					# a> 0 отталкивание
-					if r<SUMRADIUS+self.DETRACT1:
-						a = 1/r*self.DETRACT_KOEFF1
-
-					if r<SUMRADIUS+self.DETRACT2:
-						a = 1/r*self.DETRACT_KOEFF2
-
-					if self.competitive.get() and not atom_i.type==100:
-						Q = atom_i.q*atom_j.q
-						a+= Q/r*self.ATTRACT_KOEFF
-
-					Ex = Ex + delta_x/r *a
-					Ey = Ey + delta_y/r *a
-					allnEx = 0
-					allnEy = 0
-					naf = 0
-
-					if r<30: 
-						for n1 in atom_i.nodes:
-							n1x = atom_i.x + cos(n1.f+atom_i.f)*atom_i.r
-							n1y = atom_i.y - sin(n1.f+atom_i.f)*atom_i.r
-
-							nEx = 0
-							nEy = 0
-							naf = 0
-							for n2 in atom_j.nodes:
-								n2x = atom_j.x + cos(n2.f+atom_j.f)*atom_j.r
-								n2y = atom_j.y - sin(n2.f+atom_j.f)*atom_j.r
-								delta_x = n1x-n2x
-								delta_y = n1y-n2y
-								r2n = delta_x*delta_x + delta_y*delta_y
-								rn = sqrt(r2n) 
-								if rn==0: continue
-								a = 0
-								if rn<self.BONDR and not n1.bonded and not n2.bonded:
-									n1.bond(n2)
-	#								self.calculate_q(atom_i)	
-	#								self.calculate_q(atom_j)
-								if rn>self.BONDR and n1.pair == n2:
-									if not self.bondlock.get():
-										n1.unbond()
-	#									self.calculate_q(atom_i)	
-	#									self.calculate_q(atom_j)
-								if n1.pair == n2:
-									if (rn>0): 
-										a = -r2n*self.BOND_KOEFF
-										naf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+atom_i.f)*atom_i.r * delta_y + delta_x*sin(n1.f+atom_i.f)*atom_i.r)
-	
-								nEx = nEx + delta_x/rn * a
-								nEy = nEy + delta_y/rn * a
-
-							allnEx = allnEx + nEx
-							allnEy = allnEy + nEy
-							atom_i.vf = atom_i.vf + naf
-
-						Ex+= allnEx
-						Ey+= allnEy
-				atom_i.ax= K*Ex/atom_i.m 
-				atom_i.ay= K*Ey/atom_i.m				
-				if self.gravity.get():
-					atom_i.ay +=self.g
-=======
 				naf = 0
 				jj = np.where(np.logical_and(r[i]>0,r[i]<40))
 				
@@ -1178,7 +1090,6 @@ class Space:
 			self.np_ay= K*Ey/self.np_m
 			if self.gravity.get():
 				self.np_ay += self.g
->>>>>>> numpy
 
 			#set mixers velocity		
 			if len(self.mixers)>0:
