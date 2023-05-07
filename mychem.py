@@ -40,7 +40,7 @@ class Node:
 		self.pair = None
 		self.canvas_id = None
 		self.parent = parent
-		self.q = 1
+
 	def shift_q(self, n):
 		#PHCSNO
 		type1 = self.parent.type
@@ -49,31 +49,27 @@ class Node:
 		i1 = table.index(type1)
 		i2 = table.index(type2)
 		canbond = False
-		(n1,n2)=(None,None)
-		for ni in self.parent.nodes:
+		(ep1,ep2)=(None,None)
+		for ep_i in self.parent.el_pairs:
 			if canbond:
 				break
-			for nj in n.parent.nodes:
-				if not ni.bonded2 and not nj.bonded2 and (ni.q+nj.q == 2):
+			for ep_j in n.parent.el_pairs:
+				if not ep_i.assigned and not ep_j.assigned and (ep_i.ecount+ep_j.ecount == 2):
+					(ep1,ep2)=(ep_i,ep_j)
+					ep1.assigned = True
+					self.assigned_ep = ep1
+					ep2.assigned = True
+					n.assigned_ep = ep2
 					canbond = True
-					(n1,n2)=(ni,nj)
-					n1.bonded2 = True
-					n2.bonded2 = True
 					break
 				
-		shifttable = [ [(0,0), (0,1), (0,2) ],
-				       [(0,1), (0,2), (1,2) ], 
-				       [(0,2), (1,2), (2,2) ]]
-		shifttable2 = [ [(0,0), (0,1), (1,1) ],
-				       [(1,0), (1,1), (1,2) ], 
-				       [(1,1), (2,1), (2,2) ]]
 		if canbond:
 			if i1<i2:
-				(n1.q, n2.q) = (0,2)
+				(ep1.ecount, ep2.ecount) = (0,2)
 			if i1>i2:
-				(n1.q, n2.q) = (2,0)
+				(ep1.ecount, ep2.ecount) = (2,0)
 			if i1==i2:
-				(n1.q, n2.q) = (1,1)
+				(ep1.ecount, ep2.ecount) = (1,1)
 		return canbond
 
 	def bond(self,n):
@@ -81,27 +77,37 @@ class Node:
 		if canbond:
 			n.pair = self
 			n.bonded = True
-			n.parent.bonded +=1
 			self.pair = n
 			self.bonded = True
-			self.parent.bonded +=1
 	
 	def unbond(self):
 		if self.bonded:
+			#
+			if self.assigned_ep.ecount == 1 and self.pair.assigned_ep.ecount == 1:
+				if random.choice([False,True]):
+					self.assigned_ep.ecount = 0
+					self.pair.assigned_ep.ecount = 2
+				else:
+					self.assigned_ep.ecount = 2
+					self.pair.assigned_ep.ecount = 0
+			self.pair.assigned_ep.assigned = False
+			self.pair.assigned_ep = False
+			self.assigned_ep.assigned = False
+			self.assigned_ep = False
+
 			self.pair.pair = None
 			self.pair.bonded = False
-			for n in self.pair.parent.nodes:
-				if n.bonded2:
-					n.bonded2 = False
 			self.pair.parent.bonded-=1
 			self.pair = None
 			self.bonded = False
-			for n in self.parent.nodes:
-				if n.bonded2:
-					n.bonded2 = False
 
-			self.bonded2 = False
-			self.parent.bonded+=1
+
+class ElectronPairing():
+	def __init__(self):
+		self.ecount = 1
+		self.assigned = False
+		#self.node = None
+
 
 class Atom:
 	id = 0
@@ -123,6 +129,7 @@ class Atom:
 		self.type = type
 		self.r = r
 		self.nodes = []
+		self.el_pairs = []
 		self.bonded = 0
 		self.fixed = fixed
 		self.near = []
@@ -151,11 +158,15 @@ class Atom:
 				n = Node(self)
 				n.f = 2*PI/self.type*i
 				self.nodes.append(n)
+				ep = ElectronPairing()
+				self.el_pairs.append(ep)
 		elif self.type==6:
 			(n1,n2) = (Node(self),Node(self))				
 			n1.f = 0
 			n2.f = PI
 			self.nodes.extend([n1,n2])
+			(ep1,ep2) = (ElectronPairing(), ElectronPairing())
+			self.el_pairs.extend([ep1,ep2])
 		elif self.type==10:
 			(n1,n2,n3) = (Node(self),Node(self),Node(self))
 			n1.f = 0
@@ -165,11 +176,12 @@ class Atom:
 
 	def calculate_q(self):
 		q = 0
-		for n in self.nodes:
-			if n.q==0:
+		for ep  in self.el_pairs:
+			if ep.ecount==0:
 				q+=1
-			if n.q==2:
+			if ep.ecount==2:
 				q-=1
+		self.q = q				
 		return q
 			
 	def unbond(self):
@@ -438,7 +450,7 @@ class Space:
 		#print(event.keysym)
 
 	def handle_esc(self,event=None):
-		if event and not self.merge_mode:
+		if event and not self.merge_mode and not self.adding_mode and not self.moving_mode:
 			self.file_merge_recent()
 			return
 		if self.moving_mode:
@@ -625,11 +637,11 @@ class Space:
 			bbox = self.canvas.bbox(a.canvas_id)
 			if bbox[0] <= x <= bbox[2] and bbox[1] <= y <= bbox[3]:
 				info = "Type=" + str(a.type)
-				info += " bond state:"
-				for n in a.nodes:
-					info+=" " + str(n.q)
-				for n in a.nodes:
-					info+=" " + str(n.bonded2)
+				info += " EP state:"
+				for ep in a.el_pairs:
+					info+=" " + str(ep.ecount)
+				for ep in a.el_pairs:
+					info+=" " + str(ep.assigned)
 				self.status_bar.set(info)
 		if self.pause:
 			self.update_canvas()							
