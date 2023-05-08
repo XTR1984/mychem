@@ -79,6 +79,7 @@ class Node:
 			n.bonded = True
 			self.pair = n
 			self.bonded = True
+		return canbond
 	
 	def unbond(self):
 		if self.bonded:
@@ -248,13 +249,13 @@ class Space:
 		self.ATOMRADIUS = 10
 		self.BOND_KOEFF = 0.2
 		self.BONDR = 4
-		self.ATTRACT_KOEFF= 0.5
+		self.ATTRACT_KOEFF= 0.05
 		#self.ATTRACTR = 5*self.ATOMRADIUS
 		self.ROTA_KOEFF = 0.00005
 		self.DETRACT1 = -3
-		self.DETRACT_KOEFF1 = 15
+		self.DETRACT_KOEFF1 = 20
 		self.DETRACT2 = 3
-		self.DETRACT_KOEFF2= 4
+		self.DETRACT_KOEFF2= 3
 		self.MAXVELOCITY = 1
 		self.t = -1
 		self.atoms = []	
@@ -296,6 +297,8 @@ class Space:
 		self.competitive.set(True)
 		self.bondlock = tk.BooleanVar()
 		self.bondlock.set(False)
+		self.linear_field = tk.BooleanVar()
+		self.linear_field.set(False)
 		self.update_delta= tk.IntVar(value=5)
 		self.show_q = tk.BooleanVar()
 		self.show_q.set(True)
@@ -316,6 +319,7 @@ class Space:
 		sim_menu.add_checkbutton(label="Competitive", accelerator="c", variable=self.competitive,command=self.handle_c)
 		sim_menu.add_checkbutton(label="Bond lock", accelerator="b", variable=self.bondlock,command=self.handle_bondlock)
 		sim_menu.add_checkbutton(label="Random shake", accelerator="s", variable=self.shake,command=self.handle_shake)
+		sim_menu.add_checkbutton(label="Linear field", accelerator="Alt-l", variable=self.linear_field,command=self.handle_fieldtype)
 		add_menu = tk.Menu(self.menu_bar, tearoff=False)
 		add_menu.add_command(label="H", accelerator="1",command=lambda:self.handle_keypress(keysym="1"))
 		add_menu.add_command(label="O", accelerator="2",command=lambda:self.handle_keypress(keysym="2"))
@@ -349,6 +353,7 @@ class Space:
 		self.root.bind("<Alt-n>", self.file_new)
 		self.root.bind("<m>", self.file_merge)
 		self.root.bind("<l>", self.file_merge_recent)
+		self.root.bind("<Alt-l>", self.handle_fieldtype)
 		self.root.bind("<o>", self.file_open)
 		self.root.bind("<Alt-s>", self.file_save)
 		self.root.bind("<s>", self.handle_shake)
@@ -539,6 +544,12 @@ class Space:
 		if event:
 			self.gravity.set(not self.gravity.get())
 		self.status_bar.set("Gravity is "+ OnOff(self.gravity.get()))
+
+	def handle_fieldtype(self,event=None):
+		if event:
+			self.linear_field.set(not self.linear_field.get())
+		self.status_bar.set("Linear field is "+ OnOff(self.linear_field.get()))
+
 
 	def handle_bondlock(self,event=None):
 		if event:
@@ -900,7 +911,8 @@ class Space:
 		N = len(self.atoms)
 		Ex = np.zeros(N)
 		Ey = np.zeros(N)
-		print("Calculating...")
+		print("Calculating")
+		#self.status_bar.set("Calculating...")
 		x = np.arange(0,self.WIDTH)
 		y = np.arange(0,self.HEIGHT)
 		probe_x,probe_y = np.meshgrid(x,y)
@@ -914,10 +926,16 @@ class Space:
 		a[r<self.np_r-self.DETRACT2] = (r_reciproc*self.DETRACT_KOEFF2)[r<self.np_r-self.DETRACT2]
 		if self.competitive.get():	
 			Q = np.outer(1, self.np_q)
-			a+= np.divide(Q,r,where=r!=0)*self.ATTRACT_KOEFF
-		np.fill_diagonal(a,0)
+			if self.linear_field.get():
+				a+= Q*self.ATTRACT_KOEFF*0.05
+			else:
+				a+= np.divide(Q,r,where=r!=0)*self.ATTRACT_KOEFF
+		#np.fill_diagonal(a,0)
 		a_x = np.divide(delta_x,r,where=r!=0) *a
 		a_y = np.divide(delta_y,r,where=r!=0) *a
+#		a_x = delta_x *a
+#		a_y = delta_y *a
+
 		Ex = a_x.sum(axis=1)
 		Ey = a_y.sum(axis=1)
 		E2 = Ex*Ex + Ey*Ey
@@ -926,8 +944,9 @@ class Space:
 		#Emax = E.max()
 		print("max=",E.max())
 		print("min=",E.min())
-		E = np.clip(E,0,0.05)
-		E = E/E.max()*255
+		c = 0.005
+		E = np.clip(E,0,c)
+		E = E/c*255
 		draw = ImageDraw.Draw(fimage)
 		for y in range(0, self.HEIGHT):
 			for x in range(0,self.WIDTH):
@@ -935,6 +954,7 @@ class Space:
 		self.fphoto = ImageTk.PhotoImage(fimage)   #in self because PhotoImage garbage collected and wtf
 		self.canvas.create_image(0,0,anchor="nw",image=self.fphoto)
 		self.update_canvas(noclear=True)
+		self.status_bar.set("Ready")
 
 	def atoms2numpy(self):
 		N = len(self.atoms)
@@ -1068,7 +1088,10 @@ class Space:
 			a[r<self.np_SUMRADIUS_D2] = (r_reciproc*self.DETRACT_KOEFF2)[r<self.np_SUMRADIUS_D2]
 			if self.competitive.get():
 						Q = np.outer(self.np_q, self.np_q)
-						a += np.divide(Q,r,where=r!=0)*self.ATTRACT_KOEFF
+						if self.linear_field.get():
+							a+= Q*self.ATTRACT_KOEFF*0.01
+						else:
+							a += np.divide(Q,r,where=r!=0)*self.ATTRACT_KOEFF
 			np.fill_diagonal(a,0)
 			a_x = np.divide(delta_x,r,where=r!=0) *a
 			a_y = np.divide(delta_y,r,where=r!=0) *a
@@ -1102,9 +1125,13 @@ class Space:
 							if rn==0: continue
 							a = 0
 							if rn<self.BONDR and not n1.bonded and not n2.bonded:
-								n1.bond(n2)
-								self.np_q[i] = atom_i.calculate_q()
-								self.np_q[j] = atom_j.calculate_q()
+								if n1.bond(n2):
+									self.np_q[i] = atom_i.calculate_q()
+									self.np_q[j] = atom_j.calculate_q()
+									self.np_vx[i] *=0.5
+									self.np_vy[i] *=0.5
+									self.np_vx[j] *=0.5
+									self.np_vy[j] *=0.5
 							if rn>self.BONDR and n1.pair == n2:
 								if not self.bondlock.get():
 									n1.unbond()
