@@ -909,48 +909,80 @@ class Space:
 		self.sim_pause()
 		fimage = Image.new("RGB",(self.WIDTH,self.HEIGHT),(0,0,0))
 		N = len(self.atoms)
-		Ex = np.zeros(N)
-		Ey = np.zeros(N)
 		print("Calculating")
-		#self.status_bar.set("Calculating...")
-		x = np.arange(0,self.WIDTH)
-		y = np.arange(0,self.HEIGHT)
-		probe_x,probe_y = np.meshgrid(x,y)
-		delta_x = np.subtract.outer(probe_x.ravel(), self.np_x)
-		delta_y = np.subtract.outer(probe_y.ravel(), self.np_y)
-		r2 = delta_x*delta_x + delta_y*delta_y
-		r = np.sqrt(r2)
-		r_reciproc = np.reciprocal(r,where=r!=0)
-		a= np.zeros_like(r)
-		a[r<self.np_r-self.DETRACT1] = (r_reciproc*self.DETRACT_KOEFF1)[r<self.np_r-self.DETRACT1]
-		a[r<self.np_r-self.DETRACT2] = (r_reciproc*self.DETRACT_KOEFF2)[r<self.np_r-self.DETRACT2]
-		if self.competitive.get():	
-			Q = np.outer(1, self.np_q)
-			if self.linear_field.get():
-				a+= Q*self.ATTRACT_KOEFF*0.05
-			else:
-				a+= np.divide(Q,r,where=r!=0)*self.ATTRACT_KOEFF
-		#np.fill_diagonal(a,0)
-		a_x = np.divide(delta_x,r,where=r!=0) *a
-		a_y = np.divide(delta_y,r,where=r!=0) *a
-#		a_x = delta_x *a
-#		a_y = delta_y *a
+		if N<80:
+			#self.status_bar.set("Calculating...")
+			x = np.arange(0,self.WIDTH)
+			y = np.arange(0,self.HEIGHT)
+			probe_x,probe_y = np.meshgrid(x,y)
+			delta_x = np.subtract.outer(probe_x.ravel(), self.np_x)
+			delta_y = np.subtract.outer(probe_y.ravel(), self.np_y)
+			r2 = delta_x*delta_x + delta_y*delta_y
+			r = np.sqrt(r2)
+			r_reciproc = np.reciprocal(r,where=r!=0)
+			a= np.zeros_like(r)
+			a[r<self.np_r-self.DETRACT1] = (r_reciproc*self.DETRACT_KOEFF1)[r<self.np_r-self.DETRACT1]
+			a[r<self.np_r-self.DETRACT2] = (r_reciproc*self.DETRACT_KOEFF2)[r<self.np_r-self.DETRACT2]
+			if self.competitive.get():	
+				Q = np.outer(1, self.np_q)
+				if self.linear_field.get():
+					a+= Q*self.ATTRACT_KOEFF*0.05
+				else:
+					a+= np.divide(Q,r,where=r!=0)*self.ATTRACT_KOEFF
+			#np.fill_diagonal(a,0)
+			a_x = np.divide(delta_x,r,where=r!=0) *a
+			a_y = np.divide(delta_y,r,where=r!=0) *a
+	#		a_x = delta_x *a
+	#		a_y = delta_y *a
 
-		Ex = a_x.sum(axis=1)
-		Ey = a_y.sum(axis=1)
-		E2 = Ex*Ex + Ey*Ey
-		E = np.sqrt(E2)
-		#E = Ex+Ey
-		#Emax = E.max()
-		print("max=",E.max())
-		print("min=",E.min())
-		c = 0.005
-		E = np.clip(E,0,c)
-		E = E/c*255
-		draw = ImageDraw.Draw(fimage)
-		for y in range(0, self.HEIGHT):
+			Ex = a_x.sum(axis=1)
+			Ey = a_y.sum(axis=1)
+			E2 = Ex*Ex + Ey*Ey
+			E = np.sqrt(E2)
+			#E = Ex+Ey
+			#Emax = E.max()
+			print("max=",E.max())
+			print("min=",E.min())
+			c = 0.005
+			E = np.clip(E,0,c)
+			E = E/c*255
+			draw = ImageDraw.Draw(fimage)
+			for y in range(0, self.HEIGHT):
+				for x in range(0,self.WIDTH):
+					draw.point((x,y),fill=(0,int(E[y*self.WIDTH+x]),0))
+		else:
+			E = np.zeros((self.WIDTH, self.HEIGHT))
 			for x in range(0,self.WIDTH):
-				draw.point((x,y),fill=(0,int(E[y*self.WIDTH+x]),0))
+				for y in range(0,self.HEIGHT):
+					delta_x = np.subtract.outer([x], self.np_x)
+					delta_y = np.subtract.outer([y], self.np_y)
+					r2 = delta_x*delta_x + delta_y*delta_y
+					r = np.sqrt(r2)
+					r_reciproc = np.reciprocal(r,where=r!=0)
+					a= np.zeros_like(r)
+					a[r<self.np_r-self.DETRACT1] = (r_reciproc*self.DETRACT_KOEFF1)[r<self.np_r-self.DETRACT1]
+					a[r<self.np_r-self.DETRACT2] = (r_reciproc*self.DETRACT_KOEFF2)[r<self.np_r-self.DETRACT2]
+					if self.competitive.get():	
+						Q = np.outer(1, self.np_q)
+						if self.linear_field.get():
+							a+= Q*self.ATTRACT_KOEFF*0.05
+						else:
+							a+= np.divide(Q,r,where=r!=0)*self.ATTRACT_KOEFF
+					a_x = np.divide(delta_x,r,where=r!=0) *a
+					a_y = np.divide(delta_y,r,where=r!=0) *a
+					Ex = a_x.sum(axis=1)
+					Ey = a_y.sum(axis=1)
+					E2 = Ex*Ex + Ey*Ey
+					E[x,y] = np.sqrt(E2)
+			print("max=",E.max())
+			print("min=",E.min())
+			c = 0.005
+			E = np.clip(E,0,c)
+			E = E/c*255
+			draw = ImageDraw.Draw(fimage)
+			for y in range(0, self.HEIGHT):
+				for x in range(0,self.WIDTH):
+					draw.point((x,y),fill=(0,int(E[x,y]),0))
 		self.fphoto = ImageTk.PhotoImage(fimage)   #in self because PhotoImage garbage collected and wtf
 		self.canvas.create_image(0,0,anchor="nw",image=self.fphoto)
 		self.update_canvas(noclear=True)
@@ -1089,7 +1121,7 @@ class Space:
 			if self.competitive.get():
 						Q = np.outer(self.np_q, self.np_q)
 						if self.linear_field.get():
-							a+= Q*self.ATTRACT_KOEFF*0.01
+							a+= Q*self.ATTRACT_KOEFF*0.1
 						else:
 							a += np.divide(Q,r,where=r!=0)*self.ATTRACT_KOEFF
 			np.fill_diagonal(a,0)
