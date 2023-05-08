@@ -6,6 +6,8 @@ Pseudochemical 2d sandbox
 for use install Pillow and Numpy with
 - python -m pip install pillow numpy
 
+Be careful. This application may create misconceptions about chemical interactions
+
 Some examples:
 
 !["demopic 1](images/demopic1.PNG?raw=true )
