@@ -9,7 +9,6 @@ import random
 import os
 import json
 from json import encoder
-from turtle import dot
 import numpy as np
 #encoder.FLOAT_REPR = lambda o: format(o, '.3f')
 
@@ -92,9 +91,9 @@ class Node:
 					self.assigned_ep.ecount = 2
 					self.pair.assigned_ep.ecount = 0
 			self.pair.assigned_ep.assigned = False
-			self.pair.assigned_ep = False
+			self.pair.assigned_ep = None
 			self.assigned_ep.assigned = False
-			self.assigned_ep = False
+			self.assigned_ep = None
 
 			self.pair.pair = None
 			self.pair.bonded = False
@@ -249,7 +248,7 @@ class Space:
 		self.ATOMRADIUS = 10
 		self.BOND_KOEFF = 0.2
 		self.BONDR = 4
-		self.ATTRACT_KOEFF= 0.05
+		self.ATTRACT_KOEFF= 0.3
 		#self.ATTRACTR = 5*self.ATOMRADIUS
 		self.ROTA_KOEFF = 0.00005
 		self.DETRACT1 = -3
@@ -292,9 +291,12 @@ class Space:
 		self.gravity = tk.BooleanVar()
 		self.shake = tk.BooleanVar()
 		self.shake.set(False)
-		self.SHAKE_KOEFF = 1
+		self.SHAKE_KOEFF = 3
 		self.competitive = tk.BooleanVar()
 		self.competitive.set(True)
+		self.redox = tk.BooleanVar()
+		self.redox.set(False)
+		self.redox_rate = 1
 		self.bondlock = tk.BooleanVar()
 		self.bondlock.set(False)
 		self.linear_field = tk.BooleanVar()
@@ -314,12 +316,14 @@ class Space:
 		file_menu.add_command(label="Exit", command=self.file_exit)
 		sim_menu = tk.Menu(self.menu_bar, tearoff=False)
 		sim_menu.add_command(label="Go/Pause", accelerator="Space",command=self.handle_space)
-		sim_menu.add_command(label="Reset", accelerator="r",command=self.reset)
+		sim_menu.add_command(label="Reset", accelerator="Alt+r",command=self.reset)
 		sim_menu.add_checkbutton(label="Gravity", accelerator="g", variable=self.gravity,command=self.handle_g)
 		sim_menu.add_checkbutton(label="Competitive", accelerator="c", variable=self.competitive,command=self.handle_c)
 		sim_menu.add_checkbutton(label="Bond lock", accelerator="b", variable=self.bondlock,command=self.handle_bondlock)
 		sim_menu.add_checkbutton(label="Random shake", accelerator="s", variable=self.shake,command=self.handle_shake)
+		sim_menu.add_checkbutton(label="Random redox", accelerator="r", variable=self.redox,command=self.handle_redox)
 		sim_menu.add_checkbutton(label="Linear field", accelerator="Alt-l", variable=self.linear_field,command=self.handle_fieldtype)
+		
 		add_menu = tk.Menu(self.menu_bar, tearoff=False)
 		add_menu.add_command(label="H", accelerator="1",command=lambda:self.handle_keypress(keysym="1"))
 		add_menu.add_command(label="O", accelerator="2",command=lambda:self.handle_keypress(keysym="2"))
@@ -356,6 +360,8 @@ class Space:
 		self.root.bind("<Alt-l>", self.handle_fieldtype)
 		self.root.bind("<o>", self.file_open)
 		self.root.bind("<Alt-s>", self.file_save)
+		self.root.bind("<Alt-r>", self.reset)
+		self.root.bind("<r>", self.handle_redox)
 		self.root.bind("<s>", self.handle_shake)
 		self.root.bind("<b>", self.handle_bondlock)
 		self.root.bind("<Button-1>",self.handle_button1)
@@ -442,8 +448,6 @@ class Space:
 		if keysym=='q':			
 			self.show_q.set(not self.show_q.get())
 			self.update_canvas()
-		if keysym=='r':		
-			self.reset()
 		if keysym=='f':		
 			self.draw_field()
 		if self.adding_mode:
@@ -555,6 +559,12 @@ class Space:
 		if event:
 			self.bondlock.set(not self.bondlock.get())
 		self.status_bar.set("Bondlock is "+ OnOff(self.bondlock.get()))
+
+	def handle_redox(self,event=None):
+		if event:
+			self.redox.set(not self.redox.get())
+		self.status_bar.set("Random redox is "+ OnOff(self.redox.get()))
+
 
 	def handle_shake(self,event=None):
 		if event:
@@ -801,7 +811,7 @@ class Space:
 
 
 		
-	def reset(self):
+	def reset(self,event=None):
 		if not self.resetdata:
 			return
 		self.file_new()
@@ -926,7 +936,7 @@ class Space:
 			if self.competitive.get():	
 				Q = np.outer(1, self.np_q)
 				if self.linear_field.get():
-					a+= Q*self.ATTRACT_KOEFF*0.05
+					a+= Q*self.ATTRACT_KOEFF
 				else:
 					a+= np.divide(Q,r,where=r!=0)*self.ATTRACT_KOEFF
 			#np.fill_diagonal(a,0)
@@ -965,7 +975,7 @@ class Space:
 					if self.competitive.get():	
 						Q = np.outer(1, self.np_q)
 						if self.linear_field.get():
-							a+= Q*self.ATTRACT_KOEFF*0.05
+							a+= Q*self.ATTRACT_KOEFF
 						else:
 							a+= np.divide(Q,r,where=r!=0)*self.ATTRACT_KOEFF
 					a_x = np.divide(delta_x,r,where=r!=0) *a
@@ -1173,9 +1183,29 @@ class Space:
 								if (rn>0): 
 									a = -r2n*self.BOND_KOEFF
 									naf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+self.np_f[i])*atom_i.r * delta_y + delta_x*sin(n1.f+self.np_f[i])*atom_i.r)
+									if self.redox.get():
+										if random.randint(0,10000)==1:
+											pair_a = np
+											(ep1, ep2) = (n1.assigned_ep, n2.assigned_ep)
+											(ecount1,ecount2) = (n1.assigned_ep.ecount,n2.assigned_ep.ecount)
+											n1.unbond()
+											if random.choice([True,False]):
+												print("reduction")
+												if ecount2 ==0:
+													ecount2 = 1
+												if ecount1 == 0:
+													ecount1 == 1
+											else:
+												print("oxidation")
+												if ecount2 ==2:
+													ecount2 = 1
+												if ecount1 == 2:
+													ecount1 == 1
+											(ep1.ecount,ep2.ecount) = (ecount1,ecount2)
+											self.np_q[i] = atom_i.calculate_q()
+											self.np_q[j] = atom_j.calculate_q()
 							if not n1.bonded and not n2.bonded:
 								naf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+self.np_f[i])*atom_i.r * delta_y + delta_x*sin(n1.f+self.np_f[i])*atom_i.r)									
-
 							nEx += delta_x/rn * a
 							nEy += delta_y/rn * a
 
@@ -1185,8 +1215,8 @@ class Space:
 
 				Ex[i] += allnEx
 				Ey[i] += allnEy
-			self.np_ax= K*Ex/self.np_m
-			self.np_ay= K*Ey/self.np_m
+			self.np_ax= Ex/self.np_m
+			self.np_ay= Ey/self.np_m
 
 			if self.gravity.get():
 				self.np_ay += self.g
