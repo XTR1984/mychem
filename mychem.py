@@ -83,13 +83,13 @@ class Node:
 	def unbond(self):
 		if self.bonded:
 			#
-			if self.assigned_ep.ecount == 1 and self.pair.assigned_ep.ecount == 1:
-				if random.choice([False,True]):
-					self.assigned_ep.ecount = 0
-					self.pair.assigned_ep.ecount = 2
-				else:
-					self.assigned_ep.ecount = 2
-					self.pair.assigned_ep.ecount = 0
+			#if self.assigned_ep.ecount == 1 and self.pair.assigned_ep.ecount == 1:
+			#	if random.choice([False,True]):
+			#		self.assigned_ep.ecount = 0
+			#		self.pair.assigned_ep.ecount = 2
+			#	else:
+			#		self.assigned_ep.ecount = 2
+			#		self.pair.assigned_ep.ecount = 0
 			self.pair.assigned_ep.assigned = False
 			self.pair.assigned_ep = None
 			self.assigned_ep.assigned = False
@@ -1142,7 +1142,6 @@ class Space:
 			for i in range(0,N):
 				naf = 0
 				jj = np.where(np.logical_and(r[i]>0,r[i]<40))
-				
 				#print("jj=", jj)
 				allnEx = 0
 				allnEy = 0
@@ -1151,6 +1150,8 @@ class Space:
 					atom_i = self.atoms[i]
 					atom_j = self.atoms[j]
 					for n1 in atom_i.nodes:
+						#if self.redox.get():
+						#	if n1
 						n1x = self.np_x[i] + cos(n1.f+self.np_f[i])*atom_i.r
 						n1y = self.np_y[i] - sin(n1.f+self.np_f[i])*atom_i.r
 
@@ -1191,16 +1192,23 @@ class Space:
 											n1.unbond()
 											if random.choice([True,False]):
 												print("reduction")
-												if ecount2 ==0:
-													ecount2 = 1
-												if ecount1 == 0:
-													ecount1 == 1
+												if ecount1 == 1:
+													ecount1 = 2
+												else:
+													if ecount1 == 0:
+														ecount1 = 1
+													if ecount2 ==0:
+														ecount2 = 1
+												
 											else:
 												print("oxidation")
-												if ecount2 ==2:
-													ecount2 = 1
-												if ecount1 == 2:
-													ecount1 == 1
+												if ecount1 == 1:
+													ecount1 = 0	
+												else:
+													if ecount2 ==2:
+														ecount2 = 1
+													if ecount1 == 2:
+														ecount1 = 1
 											(ep1.ecount,ep2.ecount) = (ecount1,ecount2)
 											self.np_q[i] = atom_i.calculate_q()
 											self.np_q[j] = atom_j.calculate_q()
