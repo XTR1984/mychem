@@ -297,6 +297,8 @@ class Space:
 		self.redox = tk.BooleanVar()
 		self.redox.set(False)
 		self.redox_rate = 1
+		self.segmented_redox = tk.BooleanVar()
+		self.segmented_redox.set(False)
 		self.bondlock = tk.BooleanVar()
 		self.bondlock.set(False)
 		self.linear_field = tk.BooleanVar()
@@ -322,6 +324,7 @@ class Space:
 		sim_menu.add_checkbutton(label="Bond lock", accelerator="b", variable=self.bondlock,command=self.handle_bondlock)
 		sim_menu.add_checkbutton(label="Random shake", accelerator="s", variable=self.shake,command=self.handle_shake)
 		sim_menu.add_checkbutton(label="Random redox", accelerator="r", variable=self.redox,command=self.handle_redox)
+		sim_menu.add_checkbutton(label="Segmented redox",variable=self.segmented_redox)
 		sim_menu.add_checkbutton(label="Linear field", accelerator="Alt-l", variable=self.linear_field,command=self.handle_fieldtype)
 		
 		add_menu = tk.Menu(self.menu_bar, tearoff=False)
@@ -824,6 +827,9 @@ class Space:
 		#print(self.ucounter)
 		if not noclear:
 			self.canvas.delete("all")
+		if self.redox.get() and self.segmented_redox.get():
+			self.canvas.create_line(self.WIDTH/5,0,self.WIDTH/5,self.HEIGHT, fill="red")	
+			self.canvas.create_line(self.WIDTH/5*4,0,self.WIDTH/5*4,self.HEIGHT, fill="blue")	
 		N = len(self.atoms)
 		for i in range(0,N):
 			atom_i = self.atoms[i]
@@ -1185,33 +1191,44 @@ class Space:
 									a = -r2n*self.BOND_KOEFF
 									naf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+self.np_f[i])*atom_i.r * delta_y + delta_x*sin(n1.f+self.np_f[i])*atom_i.r)
 									if self.redox.get():
-										if random.randint(0,10000)==1:
-											pair_a = np
-											(ep1, ep2) = (n1.assigned_ep, n2.assigned_ep)
-											(ecount1,ecount2) = (n1.assigned_ep.ecount,n2.assigned_ep.ecount)
-											n1.unbond()
-											if random.choice([True,False]):
-												print("reduction")
-												if ecount1 == 1:
-													ecount1 = 2
-												else:
-													if ecount1 == 0:
-														ecount1 = 1
-													if ecount2 ==0:
-														ecount2 = 1
-												
-											else:
-												print("oxidation")
-												if ecount1 == 1:
-													ecount1 = 0	
-												else:
-													if ecount2 ==2:
-														ecount2 = 1
-													if ecount1 == 2:
-														ecount1 = 1
-											(ep1.ecount,ep2.ecount) = (ecount1,ecount2)
-											self.np_q[i] = atom_i.calculate_q()
-											self.np_q[j] = atom_j.calculate_q()
+										in_redox_zone = False
+										redox_zone = -1 
+										if self.segmented_redox.get() and self.np_x[i]<self.WIDTH/5*1:
+											redox_zone=1
+											in_redox_zone = True
+										if self.segmented_redox.get() and self.np_x[i]>self.WIDTH/5*4:
+											redox_zone=2
+											in_redox_zone = True
+										if not self.segmented_redox.get():
+											redox_zone=0
+											in_redox_zone = True
+										if in_redox_zone and random.randint(0,5000)==1:
+												pair_a = np
+												(ep1, ep2) = (n1.assigned_ep, n2.assigned_ep)
+												(ecount1,ecount2) = (n1.assigned_ep.ecount,n2.assigned_ep.ecount)
+												n1.unbond()
+												rc=random.choice([True,False])
+												if (redox_zone==1) or (redox_zone==0 and rc):
+													print("reduction")
+													if ecount1 == 1:
+														ecount1 = 2
+													else:
+														if ecount1 == 0:
+															ecount1 = 1
+														if ecount2 ==0:
+															ecount2 = 1
+												if (redox_zone==2) or (redox_zone==0 and not rc):
+													print("oxidation")
+													if ecount1 == 1:
+														ecount1 = 0	
+													else:
+														if ecount2 ==2:
+															ecount2 = 1
+														if ecount1 == 2:
+															ecount1 = 1
+												(ep1.ecount,ep2.ecount) = (ecount1,ecount2)
+												self.np_q[i] = atom_i.calculate_q()
+												self.np_q[j] = atom_j.calculate_q()
 							if not n1.bonded and not n2.bonded:
 								naf += 1/rn * self.ROTA_KOEFF * (cos(n1.f+self.np_f[i])*atom_i.r * delta_y + delta_x*sin(n1.f+self.np_f[i])*atom_i.r)									
 							nEx += delta_x/rn * a
