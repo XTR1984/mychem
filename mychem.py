@@ -23,8 +23,11 @@ def save_widget_as_image(widget, file_name):
         widget.winfo_rooty(),
         widget.winfo_rootx() + widget.winfo_width(),
         widget.winfo_rooty() + widget.winfo_height()
-    ),include_layered_windows=True).save(file_name)
+    ),include_layered_windows=False).save(file_name)
 	#exit()
+
+
+
 
 def OnOff(b):
 	if b: return "On"
@@ -257,10 +260,10 @@ class Space:
 		self.DETRACT_KOEFF2= 3
 		self.MAXVELOCITY = 1
 		self.t = -1
+		self.recordtime = 0
 		self.atoms = []	
 		self.mixers = []
 		self.action = None
-		self.recording = False
 		self.export = False
 		self.export_file = "mychem.json"
 		self.stoptime = -1
@@ -306,6 +309,9 @@ class Space:
 		self.update_delta= tk.IntVar(value=5)
 		self.show_q = tk.BooleanVar()
 		self.show_q.set(True)
+		self.recording = tk.BooleanVar()
+		self.recording.set(False)
+
 		self.root.title("Mychem")
 		self.root.resizable(0, 0)
 		self.menu_bar = tk.Menu(self.root)
@@ -326,6 +332,7 @@ class Space:
 		sim_menu.add_checkbutton(label="Random redox", accelerator="r", variable=self.redox,command=self.handle_redox)
 		sim_menu.add_checkbutton(label="Segmented redox",variable=self.segmented_redox)
 		sim_menu.add_checkbutton(label="Linear field", accelerator="Alt-l", variable=self.linear_field,command=self.handle_fieldtype)
+		sim_menu.add_checkbutton(label="Recording",variable=self.recording)
 		
 		add_menu = tk.Menu(self.menu_bar, tearoff=False)
 		add_menu.add_command(label="H", accelerator="1",command=lambda:self.handle_keypress(keysym="1"))
@@ -731,6 +738,7 @@ class Space:
 
 	def file_new(self,event=None):
 		self.t = -1
+		self.recordtime = 0
 		self.pause=True
 		self.atoms = []	
 		self.mixers = []
@@ -1085,6 +1093,11 @@ class Space:
 		self.np_y[b] = (self.HEIGHT-self.np_r)[b]
 		self.np_vy[b] = - self.np_vy[b]
 
+	def savecanvas(self, fname):
+		self.canvas.postscript(file="output/tmp.ps",colormode="color")
+		img = Image.open("output/tmp.ps")
+		img.save(fname)
+
 	def go(self):	
 		self.timer = 1
 		#self.stoptime = 1000
@@ -1092,6 +1105,7 @@ class Space:
 		self.atoms2numpy()
 		self.root.after(self.timer,self.mainloop)
 		self.root.mainloop()
+
 
 	def mainloop(self):
 			K = 1
@@ -1272,9 +1286,10 @@ class Space:
 			#update screen
 			if (self.t%self.update_delta.get()==0):
 				self.update_canvas()
-			
-			if self.recording:
-					save_widget_as_image(self.canvas,'output/'+str(self.t)+'.png')
+				if self.recording.get():
+						save_widget_as_image(self.canvas,'output/'+str(self.recordtime)+'.png')
+						#self.savecanvas('output/'+str(self.recordtime)+'.png')   needs ghostscript
+						self.recordtime+=1
 			if self.export:
 					self.do_export()
 
@@ -1284,7 +1299,7 @@ class Space:
 
 			if self.t%100 ==0:
 				self.status_bar.settime(self.t)
-				self.status_bar.setinfo("Number of atoms: "+str(N))
+				self.status_bar.setinfo("Number of atoms: "+str(N) + " REC" if self.recording.get() else "")
 			self.root.after(self.timer,self.mainloop)
   
 class StatusBar(tk.Frame):
