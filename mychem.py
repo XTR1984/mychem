@@ -298,7 +298,7 @@ class Space:
 		self.redox.set(False)
 		self.redox_rate = 1
 		self.segmented_redox = tk.BooleanVar()
-		self.segmented_redox.set(False)
+		self.segmented_redox.set(True)
 		self.bondlock = tk.BooleanVar()
 		self.bondlock.set(False)
 		self.linear_field = tk.BooleanVar()
@@ -828,8 +828,8 @@ class Space:
 		if not noclear:
 			self.canvas.delete("all")
 		if self.redox.get() and self.segmented_redox.get():
-			self.canvas.create_line(self.WIDTH/5,0,self.WIDTH/5,self.HEIGHT, fill="red")	
-			self.canvas.create_line(self.WIDTH/5*4,0,self.WIDTH/5*4,self.HEIGHT, fill="blue")	
+			self.canvas.create_line(self.WIDTH/10,0,self.WIDTH/10,self.HEIGHT, fill="blue")	
+			self.canvas.create_line(self.WIDTH/10*9,0,self.WIDTH/10*9,self.HEIGHT, fill="red")	
 		N = len(self.atoms)
 		for i in range(0,N):
 			atom_i = self.atoms[i]
@@ -1193,10 +1193,10 @@ class Space:
 									if self.redox.get():
 										in_redox_zone = False
 										redox_zone = -1 
-										if self.segmented_redox.get() and self.np_x[i]<self.WIDTH/5*1:
+										if self.segmented_redox.get() and self.np_x[i]<self.WIDTH/10*1:
 											redox_zone=1
 											in_redox_zone = True
-										if self.segmented_redox.get() and self.np_x[i]>self.WIDTH/5*4:
+										if self.segmented_redox.get() and self.np_x[i]>self.WIDTH/10*9:
 											redox_zone=2
 											in_redox_zone = True
 										if not self.segmented_redox.get():
