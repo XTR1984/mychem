@@ -1001,7 +1001,8 @@ class Space:
 					E[x,y] = np.sqrt(E2)
 			print("max=",E.max())
 			print("min=",E.min())
-			c = 0.005
+			c = E.mean()
+			print("mean=",c)
 			E = np.clip(E,0,c)
 			E = E/c*255
 			draw = ImageDraw.Draw(fimage)
