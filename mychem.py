@@ -967,7 +967,8 @@ class Space:
 			#Emax = E.max()
 			print("max=",E.max())
 			print("min=",E.min())
-			c = 0.005
+			c = E.mean()
+			print("mean=",c)
 			E = np.clip(E,0,c)
 			E = E/c*255
 			draw = ImageDraw.Draw(fimage)
@@ -1116,8 +1117,8 @@ class Space:
 			if N==0:
 				self.sim_pause()
 			self.t +=1
-			Ex=np.zeros(N)
-			Ey=np.zeros(N)
+			#Ex=np.zeros(N)
+			#Ey=np.zeros(N)
 			a = np.zeros((N,N))
 			#ones = np.ones((N,N)
 #				if self.t%30==0 or self.changed==True:
