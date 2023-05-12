@@ -640,6 +640,9 @@ class Space:
 				new_ma = []
 				for a in self.merge_atoms:
 					na = Atom(a.x,a.y,a.type,a.f,a.r,a.m,a.q)
+					for oldep,newep in zip(a.el_pairs,na.el_pairs):	
+						newep.ecount = oldep.ecount
+					na.calculate_q()	
 					new_ma.append(na)
 				self.merge_atoms = new_ma
 			self.atoms2numpy()
@@ -675,7 +678,7 @@ class Space:
 		for a in self.atoms:
 			bbox = self.canvas.bbox(a.canvas_id)
 			if bbox[0] <= x <= bbox[2] and bbox[1] <= y <= bbox[3]:
-				info = "Type=" + str(a.type)
+				info = "Type=" + str(a.type) + " Ox=" + str(int(a.q))
 				info += " EP state:"
 				for ep in a.el_pairs:
 					info+=" " + str(ep.ecount)
