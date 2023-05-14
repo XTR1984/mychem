@@ -1160,6 +1160,9 @@ class Space:
 			np.fill_diagonal(a,0)
 			a_x = np.divide(delta_x,r,where=r!=0) *a
 			a_y = np.divide(delta_y,r,where=r!=0) *a
+			#a_x or a_y can contain NaN on diagonal
+			np.fill_diagonal(a_x,0)
+			np.fill_diagonal(a_y,0)
 			Ex = a_x.sum(axis=1)
 			Ey = a_y.sum(axis=1)
 			for i in range(0,N):
