@@ -728,8 +728,6 @@ class Space:
 				f -= PI/18
 			for a in self.merge_atoms:
 				(cx,cy) = self.getpointer()
-				#a.x = a.x - self.merge_offsetx
-				#a.y = a.y - self.merge_offsety
 				a.x -=cx
 				a.y -=cy
 				(a.x, a.y) = ( a.x*cos(f) - a.y*sin(f) , a.x*sin(f) + a.y*cos(f))
@@ -1170,7 +1168,7 @@ class Space:
 				#print("jj=", jj)
 				allnEx = 0
 				allnEy = 0
-				for j in jj[0].tolist():
+				for j in jj[0]:
 					if j==i: continue
 					atom_i = self.atoms[i]
 					atom_j = self.atoms[j]
