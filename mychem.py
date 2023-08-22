@@ -177,6 +177,11 @@ class Atom:
 			n3.f = PI
 			self.nodes.extend([n1,n2,n3])
 
+	def reset_ep(self):
+		for ep in self.el_pairs:
+			ep.ecount = 1
+		self.calculate_q()	
+
 	def calculate_q(self):
 		q = 0
 		for ep  in self.el_pairs:
@@ -243,6 +248,7 @@ class Atom:
 
 class Space:
 	def __init__(self,width=1024,height=576,screenw=1024,screenh=576):
+		self.root= tk.Tk()
 		self.ucounter = 0
 		self.WIDTH=width
 		self.HEIGHT=height
@@ -251,13 +257,16 @@ class Space:
 		self.ATOMRADIUS = 10
 		self.BOND_KOEFF = 0.2
 		self.BONDR = 4
-		self.ATTRACT_KOEFF= 0.3
+		self.attract_k = tk.IntVar(value=30)
+		self.ATTRACT_KOEFF= self.attract_k.get()/100.0
 		#self.ATTRACTR = 5*self.ATOMRADIUS
 		self.ROTA_KOEFF = 0.00005
-		self.DETRACT1 = -3
-		self.DETRACT_KOEFF1 = 20
-		self.DETRACT2 = 3
-		self.DETRACT_KOEFF2= 3
+		self.REPULSION1 = -3
+		self.repulse_k1 = tk.IntVar(value=20)
+		self.REPULSION_KOEFF1 = self.repulse_k1.get()
+		self.REPULSION2 = 4
+		self.repulse_k2 = tk.IntVar(value=50)
+		self.REPULSION_KOEFF2= self.repulse_k2.get()/10.0
 		self.MAXVELOCITY = 1
 		self.t = -1
 		self.recordtime = 0
@@ -290,7 +299,6 @@ class Space:
 		self.select_y2 = 0
 		self.select_bottomright = (0,0)
 		######## tkinter ########
-		self.root= tk.Tk()
 		self.gravity = tk.BooleanVar()
 		self.shake = tk.BooleanVar()
 		self.shake.set(False)
@@ -325,6 +333,7 @@ class Space:
 		sim_menu = tk.Menu(self.menu_bar, tearoff=False)
 		sim_menu.add_command(label="Go/Pause", accelerator="Space",command=self.handle_space)
 		sim_menu.add_command(label="Reset", accelerator="Alt+r",command=self.reset)
+		#sim_menu.add_command(label="Reset electrons state", accelerator="e",command=self.reset_electrons)
 		sim_menu.add_checkbutton(label="Gravity", accelerator="g", variable=self.gravity,command=self.handle_g)
 		sim_menu.add_checkbutton(label="Competitive", accelerator="c", variable=self.competitive,command=self.handle_c)
 		sim_menu.add_checkbutton(label="Bond lock", accelerator="b", variable=self.bondlock,command=self.handle_bondlock)
@@ -371,6 +380,7 @@ class Space:
 		self.root.bind("<o>", self.file_open)
 		self.root.bind("<Alt-s>", self.file_save)
 		self.root.bind("<Alt-r>", self.reset)
+		#self.root.bind("<e>", self.reset_electrons)
 		self.root.bind("<r>", self.handle_redox)
 		self.root.bind("<s>", self.handle_shake)
 		self.root.bind("<b>", self.handle_bondlock)
@@ -427,6 +437,13 @@ class Space:
 				cy = self.canvas.canvasy(y)
 				return (cx,cy)
 
+	def reset_electrons(self,event=None):
+		self.numpy2atoms()
+		for a in self.atoms:
+			a.unbond()
+		for a in self.atoms:
+			a.reset_ep()
+		self.atoms2numpy()
 
 	def handle_keypress2(self,event=None):
 		self.handle_keypress(keysym=event.keysym)
@@ -946,8 +963,8 @@ class Space:
 			r = np.sqrt(r2)
 			r_reciproc = np.reciprocal(r,where=r!=0)
 			a= np.zeros_like(r)
-			a[r<self.np_r-self.DETRACT1] = (r_reciproc*self.DETRACT_KOEFF1)[r<self.np_r-self.DETRACT1]
-			a[r<self.np_r-self.DETRACT2] = (r_reciproc*self.DETRACT_KOEFF2)[r<self.np_r-self.DETRACT2]
+			a[r<self.np_r-self.REPULSION1] = (r_reciproc*self.REPULSION_KOEFF1)[r<self.np_r-self.REPULSION1]
+			a[r<self.np_r-self.REPULSION2] = (r_reciproc*self.REPULSION_KOEFF2)[r<self.np_r-self.REPULSION2]
 			if self.competitive.get():	
 				Q = np.outer(1, self.np_q)
 				if self.linear_field.get():
@@ -986,8 +1003,8 @@ class Space:
 					r = np.sqrt(r2)
 					r_reciproc = np.reciprocal(r,where=r!=0)
 					a= np.zeros_like(r)
-					a[r<self.np_r-self.DETRACT1] = (r_reciproc*self.DETRACT_KOEFF1)[r<self.np_r-self.DETRACT1]
-					a[r<self.np_r-self.DETRACT2] = (r_reciproc*self.DETRACT_KOEFF2)[r<self.np_r-self.DETRACT2]
+					a[r<self.np_r-self.REPULSION1] = (r_reciproc*self.REPULSION_KOEFF1)[r<self.np_r-self.REPULSION1]
+					a[r<self.np_r-self.REPULSION2] = (r_reciproc*self.REPULSION_KOEFF2)[r<self.np_r-self.REPULSION2]
 					if self.competitive.get():	
 						Q = np.outer(1, self.np_q)
 						if self.linear_field.get():
@@ -1045,8 +1062,8 @@ class Space:
 			self.np_q[i]=atom_i.q
 			self.np_type[i]=atom_i.type
 		self.np_SUMRADIUS = np.add.outer(self.np_r,self.np_r)
-		self.np_SUMRADIUS_D1 = self.np_SUMRADIUS + self.DETRACT1
-		self.np_SUMRADIUS_D2 = self.np_SUMRADIUS + self.DETRACT2
+		self.np_SUMRADIUS_D1 = self.np_SUMRADIUS + self.REPULSION1
+		self.np_SUMRADIUS_D2 = self.np_SUMRADIUS + self.REPULSION2
 
 	def numpy2atoms(self):
 		N = len(self.atoms)
@@ -1149,8 +1166,8 @@ class Space:
 			r2 = delta_x*delta_x + delta_y*delta_y
 			r = np.sqrt(r2)
 			r_reciproc = np.reciprocal(r,where=r!=0)
-			a[r<self.np_SUMRADIUS_D1] = (r_reciproc*self.DETRACT_KOEFF1)[r<self.np_SUMRADIUS_D1]
-			a[r<self.np_SUMRADIUS_D2] = (r_reciproc*self.DETRACT_KOEFF2)[r<self.np_SUMRADIUS_D2]
+			a[r<self.np_SUMRADIUS_D1] = (r_reciproc*self.REPULSION_KOEFF1)[r<self.np_SUMRADIUS_D1]
+			a[r<self.np_SUMRADIUS_D2] = (r_reciproc*self.REPULSION_KOEFF2)[r<self.np_SUMRADIUS_D2]
 			if self.competitive.get():
 						Q = np.outer(self.np_q, self.np_q)
 						if self.linear_field.get():
@@ -1339,17 +1356,32 @@ class OptionsFrame():
 		a = tk.Toplevel()
 		a.title("Options")
 		a.resizable(0, 0)
-		#a.geometry('200x150')
-		self.frame = tk.Frame(a, bd=5, relief=tk.SUNKEN)
-		self.frame.pack()
-		label = tk.Label(self.frame, text= "Update delta").pack(side=tk.LEFT)
-		self.update_slider = tk.Scale(self.frame, from_=1, to=100, orient=tk.HORIZONTAL,variable=self.space.update_delta)
-		self.update_slider.pack()
-		checkbox = tk.Checkbutton(self.frame, text="Show Q", variable=self.space.show_q)
-		checkbox.pack(side=tk.LEFT)
+		a.geometry('400x250')
+		#self.frame = tk.Frame(a, bd=5, relief=tk.SUNKEN)
+		#self.frame.pack()
+		self.label0 = tk.Label(a, text= "Update delta").grid(row=0,column=0)
+		self.update_slider = tk.Scale(a, from_=1, to=500, length=300, orient=tk.HORIZONTAL,variable=self.space.update_delta)
+		self.update_slider.grid(row=0,column=1)
+		self.label1 = tk.Label(a, text= "Attract koeff").grid(row=1,column=0)
+		self.attract_slider = tk.Scale(a, from_=1, to=500, length=300,orient=tk.HORIZONTAL,variable=self.space.attract_k,command=self.set_attract)
+		self.attract_slider.grid(row=1,column=1)
+		self.label2 = tk.Label(a, text= "Repulsion koeff1").grid(row=2,column=0)
+		self.repulsek1_slider = tk.Scale(a, from_=1, to=100, length=200,orient=tk.HORIZONTAL,variable=self.space.repulse_k1,command=self.set_repulsek1)
+		self.repulsek1_slider.grid(row=2,column=1)
+		self.label3 = tk.Label(a, text= "Repulsion koeff2").grid(row=3,column=0)
+		self.repulsek2_slider = tk.Scale(a, from_=1, to=500, length=300,orient=tk.HORIZONTAL,variable=self.space.repulse_k2,command=self.set_repulsek2)
+		self.repulsek2_slider.grid(row=3,column=1)
 
-#	def set_update_delta(self,value):
-#		self.space.update_delta=value
+		checkbox = tk.Checkbutton(a, text="Show Q", variable=self.space.show_q).grid(row=4,column=0)
+
+	def set_attract(self,value):
+		self.space.ATTRACT_KOEFF=self.space.attract_k.get()/100.0
+
+	def set_repulsek1(self,value):
+		self.space.REPULSION_KOEFF1 =self.space.repulse_k1.get()
+
+	def set_repulsek2(self,value):
+		self.space.REPULSION_KOEFF2 =self.space.repulse_k2.get()/10.0
 
 
 
